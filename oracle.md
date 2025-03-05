@@ -68,7 +68,7 @@ Here’s how to install Go on Oracle Linux:
 ### **Method 2: Install Latest Go Manually**
 1. **Download the latest Go binary**
    ```sh
-   curl -OL https://go.dev/dl/go1.22.0.linux-amd64.tar.gz
+   curl -OL https://go.dev/dl/go1.24.1.linux-amd64.tar.gz
    ```
 2. **Remove any existing Go installation**
    ```sh
@@ -76,7 +76,7 @@ Here’s how to install Go on Oracle Linux:
    ```
 3. **Extract and move Go to `/usr/local`**
    ```sh
-   sudo tar -C /usr/local -xzf go1.22.0.linux-amd64.tar.gz
+   sudo tar -C /usr/local -xzf go1.24.1.linux-amd64.tar.gz
    ```
 4. **Set up Go environment variables**  
    Add this to your `~/.bashrc` or `~/.bash_profile`:

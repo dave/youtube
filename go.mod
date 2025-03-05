@@ -1,4 +1,4 @@
-module youtube2
+module github.com/dave/youtube2
 
 go 1.23.5
 

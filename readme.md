@@ -1,7 +1,16 @@
 # oracle vm
 
-143.47.225.168
+141.147.116.40
 username: opc
+
+## configure ssh
+
+```chmod 600 ~/.ssh/oracle-ssh-key.key```
+
+## ssh into oracle vm
+```ssh -i ~/.ssh/oracle-ssh-key.key opc@141.147.116.40```
+
+# keys
 
 ## google-service-account-token.json
 Create here: https://console.cloud.google.com/iam-admin/serviceaccounts/details/104677990570467761179/keys?inv=1&invt=AbqgZw&project=wildernessprime&supportedpurview=project
