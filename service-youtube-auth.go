@@ -16,7 +16,7 @@ func getToken(config *oauth2.Config) (*oauth2.Token, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getting home dir: %w", err)
 	}
-	tokenFile := home + "/.config/wildernessprime/refresh_token.txt"
+	tokenFile := home + "/.config/wildernessprime/youtube-oauth2-refresh-token.json"
 
 	token, err := tokenFromFile(tokenFile)
 	if err == nil {
