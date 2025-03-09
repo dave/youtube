@@ -5,7 +5,6 @@ import (
 	"fmt"
 	"net/http"
 	"os"
-	"strings"
 
 	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
@@ -121,10 +120,7 @@ func (s *Service) InitialiseServiceAccount(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("getting home dir: %w", err)
 	}
-	if !strings.HasPrefix(home, "/") {
-		home += "/"
-	}
-	serviceAccountToken, err := os.ReadFile(home + ".config/wildernessprime/google-service-account-token.json")
+	serviceAccountToken, err := os.ReadFile(home + "/.config/wildernessprime/google-service-account-token.json")
 	if err != nil {
 		return fmt.Errorf("unable to read service account file: %w", err)
 	}

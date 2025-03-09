@@ -41,10 +41,7 @@ func (s *Service) InitialiseYoutubeAuthentication(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("getting home dir: %w", err)
 	}
-	if !strings.HasPrefix(home, "/") {
-		home += "/"
-	}
-	oauth2Credentials, err := os.ReadFile(home + ".config/wildernessprime/youtube-oauth2-client-secret.json")
+	oauth2Credentials, err := os.ReadFile(home + "/.config/wildernessprime/youtube-oauth2-client-secret.json")
 	if err != nil {
 		return fmt.Errorf("unable to read OAuth2 credentials file: %w", err)
 	}
