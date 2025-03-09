@@ -90,3 +90,24 @@ Here’s how to install Go on Oracle Linux:
    ```
 
 Now you're good to go! 🚀
+
+
+# git
+
+Here’s how to install Git on Oracle Linux:
+
+### **Method 1: Install via DNF (Recommended)**
+1. **Update your system**
+   ```sh
+   sudo dnf update -y
+   ```
+2. **Install Git**
+   ```sh
+   sudo dnf install -y git
+   ```
+3. **Verify Installation**
+   ```sh
+   git --version
+   ```
+
+Now you’re all set! 🎯

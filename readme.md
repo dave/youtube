@@ -1,7 +1,6 @@
 # oracle vm
 
-141.147.116.40
-username: opc
+ssh -i ~/.ssh/oracle-ssh-key.key ubuntu@132.226.215.4
 
 ## configure ssh
 
