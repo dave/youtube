@@ -16,7 +16,6 @@ import (
 	"strings"
 	"time"
 
-	"github.com/adrium/goheif"
 	"github.com/disintegration/imaging"
 	"github.com/edwvee/exiffix"
 	"github.com/golang/freetype"
@@ -318,7 +317,7 @@ func updateThumbnail(s *Service, item *Item) error {
 		return fmt.Errorf("execute thumbnail top template: %w", err)
 	}
 
-	f, err := transformImage(item.ThumbnailFile.Id, download.Body, textTopBuffer.String(), textBottomBuffer.String())
+	f, err := transformImage(download.Body, textTopBuffer.String(), textBottomBuffer.String())
 	if err != nil {
 		_ = download.Body.Close()
 		return fmt.Errorf("transforming thumbnail: %w", err)
@@ -342,24 +341,16 @@ func updateThumbnail(s *Service, item *Item) error {
 
 }
 
-func transformImage(fname string, file io.Reader, textTop, textBottom string) (io.Reader, error) {
+func transformImage(file io.Reader, textTop, textBottom string) (io.Reader, error) {
 	imgIn, err := io.ReadAll(file)
 	if err != nil {
 		return nil, fmt.Errorf("reading image: %w", err)
 	}
 	imgBuffer := bytes.NewReader(imgIn)
 
-	var img image.Image
-	if strings.HasSuffix(strings.ToLower(fname), ".heic") {
-		img, err = goheif.Decode(imgBuffer)
-		if err != nil {
-			return nil, fmt.Errorf("decoding heic image: %w", err)
-		}
-	} else {
-		img, _, err = exiffix.Decode(imgBuffer)
-		if err != nil {
-			return nil, fmt.Errorf("decoding image: %w", err)
-		}
+	img, _, err := exiffix.Decode(imgBuffer)
+	if err != nil {
+		return nil, fmt.Errorf("decoding image: %w", err)
 	}
 
 	width := 1280
