@@ -12,7 +12,11 @@ import (
 )
 
 func getToken(config *oauth2.Config) (*oauth2.Token, error) {
-	tokenFile := "/Users/dave/.config/wildernessprime/refresh_token.txt"
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return nil, fmt.Errorf("getting home dir: %w", err)
+	}
+	tokenFile := home + "/.config/wildernessprime/refresh_token.txt"
 
 	token, err := tokenFromFile(tokenFile)
 	if err == nil {
