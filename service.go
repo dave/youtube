@@ -97,10 +97,6 @@ func (s *Service) Init(ctx context.Context) error {
 
 	if DO_YOUTUBE {
 
-		if err := s.TestVideos(); err != nil {
-			return fmt.Errorf("test videos: %w", err)
-		}
-
 		if err := s.UpdateVideos(); err != nil {
 			return fmt.Errorf("updating videos: %w", err)
 		}

@@ -39,9 +39,13 @@ func (s *Service) FindDriveFiles() error {
 			if !item.Ready {
 				continue // ignore all items which aren't ready
 			}
-			if item.YoutubeVideo != nil {
-				continue // ignore all files which have already been uploaded
+			needVideo := item.YoutubeVideo == nil
+			needThumbnail := expedition.Thumbnails
+
+			if !needVideo && !needThumbnail {
+				continue
 			}
+
 			if !gotFiles {
 				var err error
 				videoFiles, err = getFilesInFolder(s.DriveService, expedition.VideosFolder)
@@ -52,49 +56,48 @@ func (s *Service) FindDriveFiles() error {
 				if err != nil {
 					return fmt.Errorf("get video files: %w", err)
 				}
-				if len(videoFiles) == 0 {
-					return fmt.Errorf("no video files found for expedition %s", expedition.Ref)
-				}
-				if len(thumbnailFiles) == 0 {
-					return fmt.Errorf("no thumbnail files found for expedition %s", expedition.Ref)
-				}
 				gotFiles = true
 			}
-			videoFilenameRegexBuffer := bytes.NewBufferString("")
-			if err := item.Expedition.Templates.ExecuteTemplate(videoFilenameRegexBuffer, "video_filename", item); err != nil {
-				return fmt.Errorf("execute video filename regex template: %w", err)
-			}
-			videoFilenameRegex, err := regexp.Compile(videoFilenameRegexBuffer.String())
-			if err != nil {
-				return fmt.Errorf("compile video filename regex: %w", err)
-			}
 
-			thumbnailFilenameRegexBuffer := bytes.NewBufferString("")
-			if err := item.Expedition.Templates.ExecuteTemplate(thumbnailFilenameRegexBuffer, "thumbnail_filename", item); err != nil {
-				return fmt.Errorf("execute thumbnail filename regex template: %w", err)
-			}
-			thumbnailFilenameRegex, err := regexp.Compile(thumbnailFilenameRegexBuffer.String())
-			if err != nil {
-				return fmt.Errorf("compile thumbnail filename regex: %w", err)
-			}
-
-			for filename := range videoFiles {
-				if videoFilenameRegex.MatchString(filename) {
-					item.VideoFile = videoFiles[filename]
-					break
+			if needVideo {
+				videoFilenameRegexBuffer := bytes.NewBufferString("")
+				if err := item.Expedition.Templates.ExecuteTemplate(videoFilenameRegexBuffer, "video_filename", item); err != nil {
+					return fmt.Errorf("execute video filename regex template: %w", err)
+				}
+				videoFilenameRegex, err := regexp.Compile(videoFilenameRegexBuffer.String())
+				if err != nil {
+					return fmt.Errorf("compile video filename regex: %w", err)
+				}
+				for filename := range videoFiles {
+					if videoFilenameRegex.MatchString(filename) {
+						item.VideoFile = videoFiles[filename]
+						break
+					}
+				}
+				if item.VideoFile == nil {
+					return fmt.Errorf("no video file found for item %s", item)
 				}
 			}
-			for filename := range thumbnailFiles {
-				if thumbnailFilenameRegex.MatchString(filename) {
-					item.ThumbnailFile = thumbnailFiles[filename]
-					break
+
+			if needThumbnail {
+				thumbnailFilenameRegexBuffer := bytes.NewBufferString("")
+				if err := item.Expedition.Templates.ExecuteTemplate(thumbnailFilenameRegexBuffer, "thumbnail_filename", item); err != nil {
+					return fmt.Errorf("execute thumbnail filename regex template: %w", err)
 				}
-			}
-			if item.VideoFile == nil {
-				return fmt.Errorf("no video file found for item %s", item)
-			}
-			if item.ThumbnailFile == nil {
-				return fmt.Errorf("no thumbnail file found for item %s", item)
+				thumbnailFilenameRegex, err := regexp.Compile(thumbnailFilenameRegexBuffer.String())
+				if err != nil {
+					return fmt.Errorf("compile thumbnail filename regex: %w", err)
+				}
+				for filename := range thumbnailFiles {
+					if thumbnailFilenameRegex.MatchString(filename) {
+						item.ThumbnailFile = thumbnailFiles[filename]
+						fmt.Println("Found thumbnail file", item.String(), item.ThumbnailFile.Name)
+						break
+					}
+				}
+				if item.ThumbnailFile == nil {
+					return fmt.Errorf("no thumbnail file found for item %s", item)
+				}
 			}
 		}
 	}
