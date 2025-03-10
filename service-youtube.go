@@ -25,9 +25,6 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
-const UPDATE = true
-const INSERT = true
-
 var ApiPartsList = []string{"snippet", "status"}
 var ApiPartsRead = []string{"snippet", "localizations", "status", "fileDetails"}
 var ApiPartsInsert = []string{"snippet", "localizations", "status"}
@@ -93,8 +90,9 @@ func (s *Service) GetVideosData() error {
 	var done bool
 	var pageToken string
 
-	for !done {
+	var totalResults int64
 
+	for !done {
 		playlistResponse, err := s.YoutubeService.PlaylistItems.
 			List([]string{"snippet"}).
 			PlaylistId(uploadsPlaylistId).
@@ -104,8 +102,9 @@ func (s *Service) GetVideosData() error {
 		if err != nil {
 			return fmt.Errorf("youtube playlistItems list call: %w", err)
 		}
+		totalResults = playlistResponse.PageInfo.TotalResults
 
-		fmt.Println("Got", len(playlistResponse.Items), "videos")
+		fmt.Println("Got", len(playlistResponse.Items), "of", totalResults, "videos")
 		var ids []string
 		for _, item := range playlistResponse.Items {
 			ids = append(ids, item.Snippet.ResourceId.VideoId)
@@ -122,6 +121,7 @@ func (s *Service) GetVideosData() error {
 			return fmt.Errorf("mismatch between playlistItems and videos")
 		}
 
+		// https://issuetracker.google.com/issues/402138565
 		for _, v := range videosResponse.Items {
 			s.YoutubeVideos[v.Id] = v
 		}
@@ -131,6 +131,27 @@ func (s *Service) GetVideosData() error {
 			done = true
 		}
 	}
+
+	if _, ok := s.YoutubeVideos["POHhwrogJ8U"]; !ok {
+		// one video is always missing from results
+		// https://issuetracker.google.com/issues/402138565
+		missingVideoResponse, err := s.YoutubeService.Videos.
+			List(ApiPartsRead).
+			Id("POHhwrogJ8U").
+			Do()
+		if err != nil {
+			return fmt.Errorf("youtube videos list call: %w", err)
+		}
+		if len(missingVideoResponse.Items) != 1 {
+			return fmt.Errorf("missing video not found")
+		}
+		v := missingVideoResponse.Items[0]
+		s.YoutubeVideos[v.Id] = v
+	}
+	if totalResults != int64(len(s.YoutubeVideos)) {
+		return fmt.Errorf("only found %d videos (should be %d)", len(s.YoutubeVideos), totalResults)
+	}
+
 	return nil
 }
 
@@ -203,25 +224,28 @@ func (s *Service) UpdateVideos() error {
 				// skip any items that don't have youtube videos
 				continue
 			}
-			changed, err := Apply(item, item.YoutubeVideo)
+			changes, err := Apply(item, item.YoutubeVideo)
 			if err != nil {
 				return fmt.Errorf("applying data: %w", err)
 			}
-			if changed {
-				if UPDATE {
+			if s.Global.Preview {
+				// store updated metadata
+				s.StorePreviewChanged(item, changes.Changed)
+				s.StorePreview(item, "video_title", changes.Title.Before, changes.Title.After)
+				s.StorePreview(item, "video_description", changes.Description.Before, changes.Description.After)
+				s.StorePreview(item, "video_privacy_status", changes.PrivacyStatus.Before, changes.PrivacyStatus.After)
+				s.StorePreview(item, "video_publish_at", changes.PublishAt.Before, changes.PublishAt.After)
+			} else {
+				if changes.Changed {
 					fmt.Printf("Updating video %s\n", item)
-
 					// clear FileDetails because it's not updatable
 					item.YoutubeVideo.FileDetails = nil
-
 					if _, err := s.YoutubeService.Videos.Update(ApiPartsUpdate, item.YoutubeVideo).Do(); err != nil {
 						return fmt.Errorf("updating video: %w", err)
 					}
-				} else {
-					fmt.Printf("Skipped video update for %s\n", item)
 				}
 			}
-			if UPDATE && expedition.Thumbnails {
+			if expedition.Thumbnails {
 				if err := updateThumbnail(s, item); err != nil {
 					return fmt.Errorf("updating thumbnails in insert: %w", err)
 				}
@@ -254,12 +278,18 @@ func (s *Service) CreateVideos() error {
 
 			video := &youtube.Video{}
 
-			_, err := Apply(item, video)
+			changes, err := Apply(item, video)
 			if err != nil {
 				return fmt.Errorf("applying data: %w", err)
 			}
 
-			if INSERT {
+			if s.Global.Preview {
+				s.StorePreviewChanged(item, changes.Changed)
+				s.StorePreview(item, "video_title", "", changes.Title.After)
+				s.StorePreview(item, "video_description", "", changes.Description.After)
+				s.StorePreview(item, "video_privacy_status", "", changes.PrivacyStatus.After)
+				s.StorePreview(item, "video_publish_at", "", changes.PublishAt.After)
+			} else {
 				fmt.Printf("Inserting video %s\n", item)
 
 				call := s.YoutubeService.Videos.Insert(ApiPartsInsert, video)
@@ -292,8 +322,6 @@ func (s *Service) CreateVideos() error {
 						return fmt.Errorf("updating thumbnails in insert: %w", err)
 					}
 				}
-			} else {
-				fmt.Printf("Skipped video insert for %s\n", item)
 			}
 		}
 	}
@@ -301,12 +329,6 @@ func (s *Service) CreateVideos() error {
 }
 
 func updateThumbnail(s *Service, item *Item) error {
-
-	fmt.Println("Updating thumbnail", item.String())
-	download, err := s.DriveService.Files.Get(item.ThumbnailFile.Id).Download()
-	if err != nil {
-		return fmt.Errorf("downloading drive file: %w", err)
-	}
 
 	textTopBuffer := bytes.NewBufferString("")
 	if err := item.Expedition.Templates.ExecuteTemplate(textTopBuffer, "thumbnail_top", item); err != nil {
@@ -317,14 +339,24 @@ func updateThumbnail(s *Service, item *Item) error {
 		return fmt.Errorf("execute thumbnail top template: %w", err)
 	}
 
-	f, err := transformImage(download.Body, textTopBuffer.String(), textBottomBuffer.String())
-	if err != nil {
+	if s.Global.Preview {
+		s.StorePreview(item, "thumbnail_top", "", textTopBuffer.String())
+		s.StorePreview(item, "video_description", "", textBottomBuffer.String())
+	} else {
+		fmt.Println("Updating thumbnail", item.String())
+		download, err := s.DriveService.Files.Get(item.ThumbnailFile.Id).Download()
+		if err != nil {
+			return fmt.Errorf("downloading drive file: %w", err)
+		}
+		f, err := transformImage(download.Body, textTopBuffer.String(), textBottomBuffer.String())
+		if err != nil {
+			_ = download.Body.Close()
+			return fmt.Errorf("transforming thumbnail: %w", err)
+		}
 		_ = download.Body.Close()
-		return fmt.Errorf("transforming thumbnail: %w", err)
-	}
-	_ = download.Body.Close()
-	if _, err := s.YoutubeService.Thumbnails.Set(item.YoutubeVideo.Id).Media(f).Do(); err != nil {
-		return fmt.Errorf("setting thumbnail: %w", err)
+		if _, err := s.YoutubeService.Thumbnails.Set(item.YoutubeVideo.Id).Media(f).Do(); err != nil {
+			return fmt.Errorf("setting thumbnail: %w", err)
+		}
 	}
 	return nil
 
@@ -466,7 +498,7 @@ func getFont(fname string) (*truetype.Font, error) {
 	return fontParsed, nil
 }
 
-func Apply(item *Item, video *youtube.Video) (changed bool, err error) {
+func Apply(item *Item, video *youtube.Video) (changes Changes, err error) {
 
 	fields := DefaultYoutubeFields()
 
@@ -474,27 +506,21 @@ func Apply(item *Item, video *youtube.Video) (changed bool, err error) {
 
 	bufDescription := &strings.Builder{}
 	if err := item.Expedition.Templates.ExecuteTemplate(bufDescription, item.Template, item); err != nil {
-		return false, fmt.Errorf("error executing description template: %w", err)
+		return Changes{}, fmt.Errorf("error executing description template: %w", err)
 	}
 	metadata, err := item.Metadata()
 	if err != nil {
-		return false, fmt.Errorf("error getting metadata: %w", err)
+		return Changes{}, fmt.Errorf("error getting metadata: %w", err)
 	}
-	fields.Description = bufDescription.String() + "\n\n{" + metadata + "}"
+	fields.Description = strings.TrimSpace(bufDescription.String()) + "\n\n{" + metadata + "}"
 
 	bufTitle := &strings.Builder{}
 	if err := item.Expedition.Templates.ExecuteTemplate(bufTitle, "title", item); err != nil {
-		return false, fmt.Errorf("error executing title template: %w", err)
+		return Changes{}, fmt.Errorf("error executing title template: %w", err)
 	}
 	fields.Title = bufTitle.String()
 
-	if fields.Equal(video) {
-		return false, nil
-	}
-
-	fields.Apply(video)
-
-	return true, nil
+	return fields.Apply(video), nil
 }
 
 type YoutubeFields struct {
@@ -520,77 +546,133 @@ func DefaultYoutubeFields() YoutubeFields {
 	}
 }
 
-func (y *YoutubeFields) Apply(video *youtube.Video) {
+type Change struct {
+	Before, After string
+}
+type Changes struct {
+	Changed                                      bool
+	PrivacyStatus, PublishAt, Description, Title Change
+}
+
+func (y *YoutubeFields) Apply(video *youtube.Video) Changes {
+
 	if video.Status == nil {
 		video.Status = &youtube.VideoStatus{}
-	}
-
-	if time.Now().After(y.PublishAt) {
-		video.Status.PrivacyStatus = "public"
-		video.Status.PublishAt = ""
-	} else {
-		video.Status.PrivacyStatus = y.PrivacyStatus
-		video.Status.PublishAt = timeToYoutube(y.PublishAt)
 	}
 
 	if video.Snippet == nil {
 		video.Snippet = &youtube.VideoSnippet{}
 	}
-	video.Snippet.CategoryId = y.CategoryId
-	video.Snippet.ChannelId = y.ChannelId
-	video.Snippet.DefaultAudioLanguage = y.DefaultAudioLanguage
-	video.Snippet.DefaultLanguage = y.DefaultLanguage
-	video.Snippet.LiveBroadcastContent = y.LiveBroadcastContent
-	video.Snippet.Description = y.Description
-	video.Snippet.Title = y.Title
-}
 
-func (y *YoutubeFields) Equal(video *youtube.Video) bool {
-	if video.Status == nil {
-		return false
+	c := Changes{
+		PrivacyStatus: Change{Before: video.Status.PrivacyStatus},
+		PublishAt:     Change{Before: video.Status.PublishAt},
+		Description:   Change{Before: video.Snippet.Description},
+		Title:         Change{Before: video.Snippet.Title},
 	}
 
 	if time.Now().After(y.PublishAt) {
-		// video should be public, if not public then it is not equal
 		if video.Status.PrivacyStatus != "public" {
-			return false
+			c.Changed = true
+			video.Status.PrivacyStatus = "public"
 		}
-		// no need to compare PublishAt - once it is released, this is blank.
+		if video.Status.PublishAt != "" {
+			c.Changed = true
+			video.Status.PublishAt = ""
+		}
 	} else {
 		if video.Status.PrivacyStatus != y.PrivacyStatus {
-			return false
+			c.Changed = true
+			video.Status.PrivacyStatus = y.PrivacyStatus
 		}
 		if video.Status.PublishAt != timeToYoutube(y.PublishAt) {
-			return false
+			c.Changed = true
+			video.Status.PublishAt = timeToYoutube(y.PublishAt)
 		}
 	}
-
-	if video.Snippet == nil {
-		return false
-	}
 	if video.Snippet.CategoryId != y.CategoryId {
-		return false
+		c.Changed = true
+		video.Snippet.CategoryId = y.CategoryId
 	}
 	if video.Snippet.ChannelId != y.ChannelId {
-		return false
+		c.Changed = true
+		video.Snippet.ChannelId = y.ChannelId
 	}
 	if video.Snippet.DefaultAudioLanguage != y.DefaultAudioLanguage {
-		return false
+		c.Changed = true
+		video.Snippet.DefaultAudioLanguage = y.DefaultAudioLanguage
 	}
 	if video.Snippet.DefaultLanguage != y.DefaultLanguage {
-		return false
+		c.Changed = true
+		video.Snippet.DefaultLanguage = y.DefaultLanguage
 	}
 	if video.Snippet.LiveBroadcastContent != y.LiveBroadcastContent {
-		return false
+		c.Changed = true
+		video.Snippet.LiveBroadcastContent = y.LiveBroadcastContent
 	}
 	if video.Snippet.Description != y.Description {
-		return false
+		c.Changed = true
+		video.Snippet.Description = y.Description
 	}
 	if video.Snippet.Title != y.Title {
-		return false
+		c.Changed = true
+		video.Snippet.Title = y.Title
 	}
-	return true
+
+	c.PrivacyStatus.After = video.Status.PrivacyStatus
+	c.PublishAt.After = video.Status.PublishAt
+	c.Description.After = video.Snippet.Description
+	c.Title.After = video.Snippet.Title
+
+	return c
 }
+
+//func (y *YoutubeFields) Equal(video *youtube.Video) bool {
+//	if video.Status == nil {
+//		return false
+//	}
+//
+//	if time.Now().After(y.PublishAt) {
+//		// video should be public, if not public then it is not equal
+//		if video.Status.PrivacyStatus != "public" {
+//			return false
+//		}
+//		// no need to compare PublishAt - once it is released, this is blank.
+//	} else {
+//		if video.Status.PrivacyStatus != y.PrivacyStatus {
+//			return false
+//		}
+//		if video.Status.PublishAt != timeToYoutube(y.PublishAt) {
+//			return false
+//		}
+//	}
+//
+//	if video.Snippet == nil {
+//		return false
+//	}
+//	if video.Snippet.CategoryId != y.CategoryId {
+//		return false
+//	}
+//	if video.Snippet.ChannelId != y.ChannelId {
+//		return false
+//	}
+//	if video.Snippet.DefaultAudioLanguage != y.DefaultAudioLanguage {
+//		return false
+//	}
+//	if video.Snippet.DefaultLanguage != y.DefaultLanguage {
+//		return false
+//	}
+//	if video.Snippet.LiveBroadcastContent != y.LiveBroadcastContent {
+//		return false
+//	}
+//	if video.Snippet.Description != y.Description {
+//		return false
+//	}
+//	if video.Snippet.Title != y.Title {
+//		return false
+//	}
+//	return true
+//}
 
 func timeToYoutube(t time.Time) string {
 	return strings.TrimSuffix(t.Format(time.RFC3339), "Z") + ".0Z"

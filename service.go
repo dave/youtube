@@ -16,6 +16,7 @@ const DO_SHEETS = true
 const DO_YOUTUBE = true
 
 type Service struct {
+	Global               *Global
 	SheetsService        *sheets.Service
 	YoutubeService       *youtube.Service
 	ServiceAccountClient *http.Client
@@ -24,6 +25,7 @@ type Service struct {
 	Sheets               map[string]*Sheet
 	Expeditions          map[string]*Expedition
 	YoutubeVideos        map[string]*youtube.Video
+	PreviewData          map[*Item]map[string]any
 }
 
 func (s *Service) Init(ctx context.Context) error {
@@ -31,6 +33,7 @@ func (s *Service) Init(ctx context.Context) error {
 	s.Sheets = map[string]*Sheet{}
 	s.Expeditions = map[string]*Expedition{}
 	s.YoutubeVideos = map[string]*youtube.Video{}
+	s.PreviewData = map[*Item]map[string]any{}
 
 	if err := s.InitialiseServiceAccount(ctx); err != nil {
 		return fmt.Errorf("unable to initialise service account: %w", err)
@@ -42,8 +45,12 @@ func (s *Service) Init(ctx context.Context) error {
 			return fmt.Errorf("init sheets service: %w", err)
 		}
 
-		if err := s.GetSheetData("expedition"); err != nil {
-			return fmt.Errorf("unable to get expedition sheet data: %w", err)
+		if err := s.GetSheetData("global", "expedition"); err != nil {
+			return fmt.Errorf("unable to get global / expedition sheet data: %w", err)
+		}
+
+		if err := s.ParseGlobal(); err != nil {
+			return fmt.Errorf("unable to parse global: %w", err)
 		}
 
 		if err := s.ParseExpeditions(); err != nil {
@@ -106,6 +113,10 @@ func (s *Service) Init(ctx context.Context) error {
 		}
 	}
 
+	if err := s.WritePreview(); err != nil {
+		return fmt.Errorf("unable to write preview: %w", err)
+	}
+
 	return nil
 }
 
@@ -123,10 +134,8 @@ func (s *Service) InitialiseServiceAccount(ctx context.Context) error {
 
 	serviceAccountConfig, err := google.JWTConfigFromJSON(
 		serviceAccountToken,
-		sheets.SpreadsheetsReadonlyScope,
 		drive.DriveReadonlyScope,
-		//youtube.YoutubeReadonlyScope,
-		//"https://www.googleapis.com/auth/youtube.force-ssl",
+		"https://www.googleapis.com/auth/spreadsheets",
 	)
 	if err != nil {
 		return fmt.Errorf("unable to parse service account file to config: %w", err)

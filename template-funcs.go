@@ -72,6 +72,7 @@ var Funcs = template.FuncMap{
 	},
 
 	"add": func(a, b int) int { return a + b },
+	"sub": func(a, b int) int { return a - b },
 
 	// date formats a date as "May 20th"
 	"date": func(date float64) string {

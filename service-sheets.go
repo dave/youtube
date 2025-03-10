@@ -2,10 +2,12 @@ package main
 
 import (
 	"fmt"
+	"sort"
 	"strings"
 	"text/template"
 	"time"
 
+	"github.com/akedrou/textdiff"
 	"google.golang.org/api/sheets/v4"
 )
 
@@ -27,10 +29,13 @@ func (s *Service) InitSheetsService() error {
 }
 
 func (s *Service) GetAllSheetsData() error {
-
 	for _, sheetData := range s.Spreadsheet.Sheets {
-		if sheetData.Properties.Title == "expedition" {
-			// already done expedition sheet
+		skip := map[string]bool{
+			"global":     true,
+			"expedition": true,
+			"preview":    true,
+		}
+		if skip[sheetData.Properties.Title] {
 			continue
 		}
 		if err := s.GetSheetData(sheetData.Properties.Title); err != nil {
@@ -40,57 +45,135 @@ func (s *Service) GetAllSheetsData() error {
 	return nil
 }
 
-func (s *Service) GetSheetData(title string) error {
-	sheet := &Sheet{
-		DataByRef: map[string]map[string]interface{}{},
-	}
-	s.Sheets[title] = sheet
+func (s *Service) GetSheetData(titles ...string) error {
+	for _, title := range titles {
+		sheet := &Sheet{
+			DataByRef: map[string]map[string]interface{}{},
+		}
+		s.Sheets[title] = sheet
 
-	for ref := range s.Expeditions {
-		if strings.HasPrefix(title, ref+"_") {
-			sheet.Name = strings.TrimPrefix(title, ref+"_")
-			sheet.Expedition = s.Expeditions[ref]
+		for ref := range s.Expeditions {
+			if strings.HasPrefix(title, ref+"_") {
+				sheet.Name = strings.TrimPrefix(title, ref+"_")
+				sheet.Expedition = s.Expeditions[ref]
+			}
+		}
+
+		if sheet.Expedition != nil && !sheet.Expedition.Process {
+			return nil
+		}
+
+		fmt.Println("Getting raw data for sheet", title)
+		values, err := s.SheetsService.Spreadsheets.Values.
+			Get(SPREADSHEET_ID, title).
+			ValueRenderOption("UNFORMATTED_VALUE").
+			Do()
+		if err != nil {
+			return fmt.Errorf("unable to retrieve values from sheet: %w", err)
+		}
+		hasRef := false
+		refColumn := 0
+		for i, row := range values.Values {
+			if i == 0 {
+				for columnIndex, header := range row {
+					if header.(string) == "ref" {
+						hasRef = true
+						refColumn = columnIndex
+					}
+					sheet.Headers = append(sheet.Headers, header.(string))
+				}
+				continue
+			}
+			rowData := map[string]interface{}{}
+			ref := ""
+			for columnIndex, cellValue := range row {
+				if hasRef && columnIndex == refColumn {
+					ref = cellValue.(string)
+				}
+				rowData[sheet.Headers[columnIndex]] = cellValue
+			}
+			sheet.Data = append(sheet.Data, rowData)
+			if hasRef {
+				sheet.DataByRef[ref] = rowData
+			}
 		}
 	}
+	return nil
+}
 
-	if sheet.Expedition != nil && !sheet.Expedition.Process {
+func (s *Service) ParseGlobal() error {
+	s.Global = &Global{
+		Preview: s.Sheets["global"].DataByRef["preview"]["value"].(bool),
+	}
+
+	return nil
+}
+
+func (s *Service) WritePreview() error {
+
+	if !s.Global.Preview {
 		return nil
 	}
 
-	fmt.Println("Getting raw data for sheet", title)
-	values, err := s.SheetsService.Spreadsheets.Values.
-		Get(SPREADSHEET_ID, title).
-		ValueRenderOption("UNFORMATTED_VALUE").
+	// clear "preview" sheet, but leave first row (headers)
+	_, err := s.SheetsService.Spreadsheets.Values.Clear(
+		SPREADSHEET_ID,
+		fmt.Sprintf("%s!2:1000", "preview"),
+		&sheets.ClearValuesRequest{},
+	).Do()
+	if err != nil {
+		return fmt.Errorf("unable to clear sheet data: %w", err)
+	}
+
+	// write preview data
+	// expedition	type	key	changed	video_privacy_status	video_publish_at	video_title	video_description	thumbnail_top	thumbnail_bottom
+	headers := []string{"changed", "video_privacy_status", "video_publish_at", "video_title", "video_description", "thumbnail_top", "thumbnail_bottom"}
+	var values [][]any
+
+	for item, data := range s.PreviewData {
+		var value []any
+		value = append(value, item.Expedition.Ref)
+		value = append(value, item.Type)
+		value = append(value, item.Key)
+		for _, name := range headers {
+			value = append(value, data[name])
+		}
+		values = append(values, value)
+	}
+
+	sort.Slice(values, func(i, j int) bool {
+		exp1 := values[i][0].(string)
+		typ1 := values[i][1].(string)
+		key1 := values[i][2].(int)
+		exp2 := values[j][0].(string)
+		typ2 := values[j][1].(string)
+		key2 := values[j][2].(int)
+		if exp1 == exp2 && typ1 == typ2 {
+			return key1 < key2
+		}
+		if exp1 == exp2 {
+			return typ1 < typ2
+		}
+		return exp1 < exp2
+	})
+
+	// Define the range to append the data
+	rangeToAppend := fmt.Sprintf("%s!A1", "preview")
+
+	// Create a request to append the specified values
+	valueRange := &sheets.ValueRange{
+		Values: values,
+	}
+
+	// Execute the append request
+	_, err = s.SheetsService.Spreadsheets.Values.Append(SPREADSHEET_ID, rangeToAppend, valueRange).
+		ValueInputOption("RAW").
+		InsertDataOption("INSERT_ROWS").
 		Do()
 	if err != nil {
-		return fmt.Errorf("unable to retrieve values from sheet: %w", err)
+		return fmt.Errorf("unable to append row to sheet: %w", err)
 	}
-	hasRef := false
-	refColumn := 0
-	for i, row := range values.Values {
-		if i == 0 {
-			for columnIndex, header := range row {
-				if header.(string) == "ref" {
-					hasRef = true
-					refColumn = columnIndex
-				}
-				sheet.Headers = append(sheet.Headers, header.(string))
-			}
-			continue
-		}
-		rowData := map[string]interface{}{}
-		ref := ""
-		for columnIndex, cellValue := range row {
-			if hasRef && columnIndex == refColumn {
-				ref = cellValue.(string)
-			}
-			rowData[sheet.Headers[columnIndex]] = cellValue
-		}
-		sheet.Data = append(sheet.Data, rowData)
-		if hasRef {
-			sheet.DataByRef[ref] = rowData
-		}
-	}
+
 	return nil
 }
 
@@ -106,7 +189,7 @@ func (s *Service) ParseExpeditions() error {
 			VideosFolder:     stringify(data["videos_folder"]),
 			ThumbnailsFolder: stringify(data["thumbnails_folder"]),
 			Data:             data,
-			Sections:         map[string]*Section{},
+			SectionsByRef:    map[string]*Section{},
 			Templates:        template.New("").Funcs(Funcs),
 		}
 	}
@@ -125,13 +208,13 @@ func (s *Service) ParseSections() error {
 
 		for _, data := range sheet.Data {
 			ref := data["ref"].(string)
-			expedition.Sections[ref] = &Section{
+			expedition.SectionsByRef[ref] = &Section{
 				Ref:        ref,
 				Name:       stringify(data["name"]),
 				Data:       data,
 				Expedition: expedition,
 			}
-			expedition.SectionsOrdered = append(expedition.SectionsOrdered, expedition.Sections[ref])
+			expedition.Sections = append(expedition.Sections, expedition.SectionsByRef[ref])
 		}
 	}
 	return nil
@@ -170,7 +253,7 @@ func (s *Service) ParseItems() error {
 			if data["section_ref"] != nil && data["section_ref"].(string) != "" {
 				sectionRef = data["section_ref"].(string)
 				var ok bool
-				section, ok = expedition.Sections[sectionRef]
+				section, ok = expedition.SectionsByRef[sectionRef]
 				if !ok {
 					return fmt.Errorf("section not found: %s", sectionRef)
 				}
@@ -272,6 +355,39 @@ func (s *Service) ParseLinkedData() error {
 
 	}
 	return nil
+}
+
+func (s *Service) StorePreviewChanged(item *Item, changed bool) {
+	if _, ok := s.PreviewData[item]; !ok {
+		s.PreviewData[item] = map[string]any{}
+	}
+	s.PreviewData[item]["changed"] = changed
+}
+
+func (s *Service) StorePreview(item *Item, name, before, after string) {
+	if _, ok := s.PreviewData[item]; !ok {
+		s.PreviewData[item] = map[string]any{}
+	}
+	if before == "" && after == "" {
+		s.PreviewData[item][name] = fmt.Sprintf("=== EMPTY ===")
+	} else if before == "" {
+		s.PreviewData[item][name] = fmt.Sprintf(
+			"=== NEW ===\n%s",
+			after,
+		)
+	} else if before == after {
+		s.PreviewData[item][name] = fmt.Sprintf(
+			"=== UNCHANGED ===\n%s",
+			after,
+		)
+	} else {
+		s.PreviewData[item][name] = fmt.Sprintf(
+			"=== CHANGED ===\n=== BEFORE ===\n%s\n=== AFTER ===\n%s\n=== DIFF ===\n%s",
+			before,
+			after,
+			textdiff.Unified("before", "after", before, after),
+		)
+	}
 }
 
 func floatToTime(f float64) time.Time {

@@ -11,6 +11,10 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
+type Global struct {
+	Preview bool
+}
+
 type Expedition struct {
 	Ref              string
 	Name             string
@@ -20,8 +24,8 @@ type Expedition struct {
 	VideosFolder     string
 	ThumbnailsFolder string
 	Data             map[string]any
-	Sections         map[string]*Section
-	SectionsOrdered  []*Section
+	SectionsByRef    map[string]*Section
+	Sections         []*Section
 	Items            []*Item
 	Templates        *template.Template
 }
