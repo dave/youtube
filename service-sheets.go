@@ -382,9 +382,9 @@ func (s *Service) StorePreview(item *Item, name, before, after string) {
 		)
 	} else {
 		s.PreviewData[item][name] = fmt.Sprintf(
-			"=== CHANGED ===\n=== BEFORE ===\n%s\n=== AFTER ===\n%s\n=== DIFF ===\n%s",
-			before,
+			"=== CHANGED ===\n%s\n=== BEFORE ===\n%s\n=== DIFF ===\n%s",
 			after,
+			before,
 			textdiff.Unified("before", "after", before, after),
 		)
 	}

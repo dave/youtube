@@ -89,7 +89,6 @@ func (s *Service) GetVideosData() error {
 
 	var done bool
 	var pageToken string
-
 	var totalResults int64
 
 	for !done {
