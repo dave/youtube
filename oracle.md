@@ -135,6 +135,8 @@ To set a budget alert in Oracle Cloud (OCI) that notifies you if you spend more 
 
 ## Set up iptables to let port 80 and 443 through
 
+To configure LetsEncrypt, you need to allow port 80 as well as 443 through the firewall. Here’s how to do it:
+
 ```
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
