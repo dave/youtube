@@ -54,7 +54,7 @@ func web(ctx context.Context) error {
 		tlsConfig = &tls.Config{Certificates: []tls.Certificate{cert}}
 
 	} else {
-		ip = "132.226.215.4"
+		ip = "uploader.wildernessprime.com"
 
 		certmagic.DefaultACME.Agreed = true
 		certmagic.DefaultACME.Email = "dave@brophy.uk"
