@@ -28,13 +28,13 @@ func main() {
 	//	log.Fatalf("Unable to initialise service: %v", err)
 	//}
 
-	if err := web1(ctx); err != nil {
-		log.Fatalf("Unable to starrt web server: %v", err)
-	}
-
-	//if err := web(ctx); err != nil {
+	//if err := web1(ctx); err != nil {
 	//	log.Fatalf("Unable to starrt web server: %v", err)
 	//}
+
+	if err := web(ctx); err != nil {
+		log.Fatalf("Unable to starrt web server: %v", err)
+	}
 
 }
 
@@ -42,6 +42,7 @@ func handler(w http.ResponseWriter, r *http.Request) {
 	fmt.Fprintf(w, "Hello, World!")
 }
 
+// 132.226.215.4
 func web1(ctx context.Context) error {
 	// simple web server
 	http.HandleFunc("/", handler)

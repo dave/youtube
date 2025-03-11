@@ -30,8 +30,9 @@ By default, Oracle blocks SSH. You need to open port **22**.
 4. Click **"Add Ingress Rule"**:
     - **Source CIDR**: `0.0.0.0/0` (allows access from anywhere)
     - **Protocol**: `TCP`
-    - **Port Range**: `22`
+    - **Destination Port Range**: `22`
     - **Save**
+5. Add the same for 443 and 80
 
 ---
 
@@ -131,3 +132,11 @@ To set a budget alert in Oracle Cloud (OCI) that notifies you if you spend more 
 4. Save & Enable
    Click Create Budget.
    Done! You’ll now get an email alert when spending crosses $1.
+
+## Set up iptables to let port 80 and 443 through
+
+```
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
+sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
+sudo netfilter-persistent save
+```
