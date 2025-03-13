@@ -31,9 +31,10 @@ func (s *Service) InitSheetsService() error {
 func (s *Service) GetAllSheetsData() error {
 	for _, sheetData := range s.Spreadsheet.Sheets {
 		skip := map[string]bool{
-			"global":     true,
-			"expedition": true,
-			"preview":    true,
+			"global":            true,
+			"expedition":        true,
+			"preview_videos":    true,
+			"preview_playlists": true,
 		}
 		if skip[sheetData.Properties.Title] {
 			continue
@@ -84,8 +85,9 @@ func (s *Service) GetSheetData(titles ...string) error {
 				}
 				continue
 			}
-			rowData := map[string]interface{}{}
+			rowData := map[string]any{}
 			ref := ""
+			rowData["row_id"] = i + 1
 			for columnIndex, cellValue := range row {
 				if hasRef && columnIndex == refColumn {
 					ref = cellValue.(string)
@@ -109,28 +111,40 @@ func (s *Service) ParseGlobal() error {
 	return nil
 }
 
-func (s *Service) WritePreview() error {
+func (s *Service) WriteVideosPreview() error {
 
 	if !s.Global.Preview {
 		return nil
 	}
 
-	// clear "preview" sheet, but leave first row (headers)
+	// clear "preview_videos" sheet, but leave first row (headers)
 	_, err := s.SheetsService.Spreadsheets.Values.Clear(
 		SPREADSHEET_ID,
-		fmt.Sprintf("%s!2:1000", "preview"),
+		fmt.Sprintf("%s!2:1000", "preview_videos"),
 		&sheets.ClearValuesRequest{},
 	).Do()
 	if err != nil {
-		return fmt.Errorf("unable to clear sheet data: %w", err)
+		return fmt.Errorf("unable to clear preview_videos sheet data: %w", err)
 	}
 
 	// write preview data
 	// expedition	type	key	changed	video_privacy_status	video_publish_at	video_title	video_description	thumbnail_top	thumbnail_bottom
-	headers := []string{"changed", "video_privacy_status", "video_publish_at", "video_title", "video_description", "thumbnail_top", "thumbnail_bottom"}
+	headers := []string{"video_privacy_status", "video_publish_at", "video_title", "video_description", "thumbnail_top", "thumbnail_bottom"}
 	var values [][]any
 
-	for item, data := range s.PreviewData {
+	var keys []*Item
+	for key := range s.VideoPreviewData {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].Expedition != keys[j].Expedition {
+			return keys[i].Expedition.RowId < keys[j].Expedition.RowId
+		}
+		return keys[i].RowId < keys[j].RowId
+	})
+
+	for _, item := range keys {
+		data := s.VideoPreviewData[item]
 		var value []any
 		value = append(value, item.Expedition.Ref)
 		value = append(value, item.Type)
@@ -141,24 +155,8 @@ func (s *Service) WritePreview() error {
 		values = append(values, value)
 	}
 
-	sort.Slice(values, func(i, j int) bool {
-		exp1 := values[i][0].(string)
-		typ1 := values[i][1].(string)
-		key1 := values[i][2].(int)
-		exp2 := values[j][0].(string)
-		typ2 := values[j][1].(string)
-		key2 := values[j][2].(int)
-		if exp1 == exp2 && typ1 == typ2 {
-			return key1 < key2
-		}
-		if exp1 == exp2 {
-			return typ1 < typ2
-		}
-		return exp1 < exp2
-	})
-
 	// Define the range to append the data
-	rangeToAppend := fmt.Sprintf("%s!A1", "preview")
+	rangeToAppend := fmt.Sprintf("%s!A1", "preview_videos")
 
 	// Create a request to append the specified values
 	valueRange := &sheets.ValueRange{
@@ -171,7 +169,81 @@ func (s *Service) WritePreview() error {
 		InsertDataOption("INSERT_ROWS").
 		Do()
 	if err != nil {
-		return fmt.Errorf("unable to append row to sheet: %w", err)
+		return fmt.Errorf("unable to append rows to preview_videos sheet: %w", err)
+	}
+
+	return nil
+}
+
+func (s *Service) WritePlaylistsPreview() error {
+
+	if !s.Global.Preview {
+		return nil
+	}
+
+	_, err := s.SheetsService.Spreadsheets.Values.Clear(
+		SPREADSHEET_ID,
+		fmt.Sprintf("%s!2:1000", "preview_playlists"),
+		&sheets.ClearValuesRequest{},
+	).Do()
+	if err != nil {
+		return fmt.Errorf("unable to clear preview_playlists sheet data: %w", err)
+	}
+
+	// write preview data
+	headers := []string{"playlist_title", "playlist_description", "playlist_content"}
+	var values [][]any
+
+	var keys []HasPlaylist
+	for key := range s.PlaylistPreviewData {
+		keys = append(keys, key)
+	}
+	sort.Slice(keys, func(i, j int) bool {
+		if keys[i].GetExpedition() != keys[j].GetExpedition() {
+			return keys[i].GetExpedition().RowId < keys[j].GetExpedition().RowId
+		}
+		if _, ok := keys[i].(*Expedition); ok {
+			return true
+		}
+		if _, ok := keys[j].(*Expedition); ok {
+			return false
+		}
+		s1 := keys[i].(*Section)
+		s2 := keys[j].(*Section)
+		return s1.RowId < s2.RowId
+	})
+
+	for _, item := range keys {
+		data := s.PlaylistPreviewData[item]
+		var value []any
+		expeditionRef := item.GetExpedition().Ref
+		var sectionRef any
+		if section, ok := item.(*Section); ok {
+			sectionRef = section.Ref
+		}
+		value = append(value, expeditionRef)
+		value = append(value, sectionRef)
+		for _, name := range headers {
+			value = append(value, data[name])
+		}
+		values = append(values, value)
+	}
+
+	// Define the range to append the data
+	rangeToAppend := fmt.Sprintf("%s!A1", "preview_playlists")
+
+	// Create a request to append the specified values
+	valueRange := &sheets.ValueRange{
+		Values: values,
+	}
+
+	// Execute the append request
+	_, err = s.SheetsService.Spreadsheets.Values.Append(SPREADSHEET_ID, rangeToAppend, valueRange).
+		ValueInputOption("RAW").
+		InsertDataOption("INSERT_ROWS").
+		Do()
+	if err != nil {
+		return fmt.Errorf("unable to append rows to preview_playlists sheet: %w", err)
 	}
 
 	return nil
@@ -181,16 +253,19 @@ func (s *Service) ParseExpeditions() error {
 	for _, data := range s.Sheets["expedition"].Data {
 		ref := data["ref"].(string)
 		s.Expeditions[ref] = &Expedition{
-			Ref:              ref,
-			Name:             data["name"].(string),
-			Ready:            data["ready"].(bool),
-			Process:          data["process"].(bool),
-			Thumbnails:       data["thumbnails"].(bool),
-			VideosFolder:     stringify(data["videos_folder"]),
-			ThumbnailsFolder: stringify(data["thumbnails_folder"]),
-			Data:             data,
-			SectionsByRef:    map[string]*Section{},
-			Templates:        template.New("").Funcs(Funcs),
+			RowId:              data["row_id"].(int),
+			Ref:                ref,
+			Name:               data["name"].(string),
+			Ready:              data["ready"].(bool),
+			Process:            data["process"].(bool),
+			Thumbnails:         data["thumbnails"].(bool),
+			VideosFolder:       stringify(data["videos_folder"]),
+			ThumbnailsFolder:   stringify(data["thumbnails_folder"]),
+			ExpeditionPlaylist: data["expedition_playlist"].(bool),
+			SectionPlaylists:   data["section_playlists"].(bool),
+			Data:               data,
+			SectionsByRef:      map[string]*Section{},
+			Templates:          template.New("").Funcs(Funcs),
 		}
 	}
 	return nil
@@ -209,6 +284,7 @@ func (s *Service) ParseSections() error {
 		for _, data := range sheet.Data {
 			ref := data["ref"].(string)
 			expedition.SectionsByRef[ref] = &Section{
+				RowId:      data["row_id"].(int),
 				Ref:        ref,
 				Name:       stringify(data["name"]),
 				Data:       data,
@@ -265,6 +341,7 @@ func (s *Service) ParseItems() error {
 			}
 
 			item := &Item{
+				RowId:      data["row_id"].(int),
 				Expedition: expedition,
 				Type:       stringify(data["type"]),
 				Key:        int(data["key"].(float64)),
@@ -357,31 +434,70 @@ func (s *Service) ParseLinkedData() error {
 	return nil
 }
 
-func (s *Service) StorePreviewChanged(item *Item, changed bool) {
-	if _, ok := s.PreviewData[item]; !ok {
-		s.PreviewData[item] = map[string]any{}
+func (s *Service) StorePlaylistPreviewOps(parent HasPlaylist, name string, ops []string) {
+	if _, ok := s.PlaylistPreviewData[parent]; !ok {
+		s.PlaylistPreviewData[parent] = map[string]any{}
 	}
-	s.PreviewData[item]["changed"] = changed
+	if len(ops) == 0 {
+		s.PlaylistPreviewData[parent][name] = "=== UNCHANGED ==="
+	} else {
+		s.PlaylistPreviewData[parent][name] = fmt.Sprintf("=== CHANGED ===\n%s", strings.Join(ops, "\n"))
+	}
 }
 
-func (s *Service) StorePreview(item *Item, name, before, after string) {
-	if _, ok := s.PreviewData[item]; !ok {
-		s.PreviewData[item] = map[string]any{}
+func (s *Service) StorePlaylistPreviewDeleted(parent HasPlaylist) {
+	if _, ok := s.PlaylistPreviewData[parent]; !ok {
+		s.PlaylistPreviewData[parent] = map[string]any{}
+	}
+	s.PlaylistPreviewData[parent]["playlist_title"] = fmt.Sprintf("=== DELETED ===")
+	s.PlaylistPreviewData[parent]["playlist_description"] = fmt.Sprintf("=== DELETED ===")
+	s.PlaylistPreviewData[parent]["playlist_content"] = fmt.Sprintf("=== DELETED ===")
+}
+
+func (s *Service) StorePlaylistPreview(parent HasPlaylist, name, before, after string) {
+	if _, ok := s.PlaylistPreviewData[parent]; !ok {
+		s.PlaylistPreviewData[parent] = map[string]any{}
 	}
 	if before == "" && after == "" {
-		s.PreviewData[item][name] = fmt.Sprintf("=== EMPTY ===")
+		s.PlaylistPreviewData[parent][name] = fmt.Sprintf("=== EMPTY ===")
 	} else if before == "" {
-		s.PreviewData[item][name] = fmt.Sprintf(
+		s.PlaylistPreviewData[parent][name] = fmt.Sprintf(
 			"=== NEW ===\n%s",
 			after,
 		)
 	} else if before == after {
-		s.PreviewData[item][name] = fmt.Sprintf(
+		s.PlaylistPreviewData[parent][name] = fmt.Sprintf(
 			"=== UNCHANGED ===\n%s",
 			after,
 		)
 	} else {
-		s.PreviewData[item][name] = fmt.Sprintf(
+		s.PlaylistPreviewData[parent][name] = fmt.Sprintf(
+			"=== CHANGED ===\n%s\n=== BEFORE ===\n%s\n=== DIFF ===\n%s",
+			after,
+			before,
+			textdiff.Unified("before", "after", before, after),
+		)
+	}
+}
+
+func (s *Service) StoreVideoPreview(item *Item, name, before, after string) {
+	if _, ok := s.VideoPreviewData[item]; !ok {
+		s.VideoPreviewData[item] = map[string]any{}
+	}
+	if before == "" && after == "" {
+		s.VideoPreviewData[item][name] = fmt.Sprintf("=== EMPTY ===")
+	} else if before == "" {
+		s.VideoPreviewData[item][name] = fmt.Sprintf(
+			"=== NEW ===\n%s",
+			after,
+		)
+	} else if before == after {
+		s.VideoPreviewData[item][name] = fmt.Sprintf(
+			"=== UNCHANGED ===\n%s",
+			after,
+		)
+	} else {
+		s.VideoPreviewData[item][name] = fmt.Sprintf(
 			"=== CHANGED ===\n%s\n=== BEFORE ===\n%s\n=== DIFF ===\n%s",
 			after,
 			before,

@@ -25,7 +25,9 @@ type Service struct {
 	Sheets               map[string]*Sheet
 	Expeditions          map[string]*Expedition
 	YoutubeVideos        map[string]*youtube.Video
-	PreviewData          map[*Item]map[string]any
+	YoutubePlaylists     map[string]*youtube.Playlist
+	VideoPreviewData     map[*Item]map[string]any
+	PlaylistPreviewData  map[HasPlaylist]map[string]any
 }
 
 func (s *Service) Init(ctx context.Context) error {
@@ -33,7 +35,9 @@ func (s *Service) Init(ctx context.Context) error {
 	s.Sheets = map[string]*Sheet{}
 	s.Expeditions = map[string]*Expedition{}
 	s.YoutubeVideos = map[string]*youtube.Video{}
-	s.PreviewData = map[*Item]map[string]any{}
+	s.YoutubePlaylists = map[string]*youtube.Playlist{}
+	s.VideoPreviewData = map[*Item]map[string]any{}
+	s.PlaylistPreviewData = map[HasPlaylist]map[string]any{}
 
 	if err := s.InitialiseServiceAccount(ctx); err != nil {
 		return fmt.Errorf("unable to initialise service account: %w", err)
@@ -92,6 +96,14 @@ func (s *Service) Init(ctx context.Context) error {
 			return fmt.Errorf("unable to parse videos metadata: %w", err)
 		}
 
+		if err := s.GetPlaylistsData(); err != nil {
+			return fmt.Errorf("unable to get playlists: %w", err)
+		}
+
+		if err := s.ParsePlaylistsMetaData(); err != nil {
+			return fmt.Errorf("unable to parse playlists metadata: %w", err)
+		}
+
 	}
 
 	if err := s.InitDriveService(); err != nil {
@@ -104,17 +116,21 @@ func (s *Service) Init(ctx context.Context) error {
 
 	if DO_YOUTUBE {
 
-		if err := s.UpdateVideos(); err != nil {
+		if err := s.CreateOrUpdateVideos(); err != nil {
 			return fmt.Errorf("updating videos: %w", err)
 		}
 
-		if err := s.CreateVideos(); err != nil {
-			return fmt.Errorf("creating videos: %w", err)
+		if err := s.CreateOrUpdatePlaylists(); err != nil {
+			return fmt.Errorf("updating playlists: %w", err)
 		}
 	}
 
-	if err := s.WritePreview(); err != nil {
-		return fmt.Errorf("unable to write preview: %w", err)
+	if err := s.WriteVideosPreview(); err != nil {
+		return fmt.Errorf("unable to write videos preview: %w", err)
+	}
+
+	if err := s.WritePlaylistsPreview(); err != nil {
+		return fmt.Errorf("unable to write playlists preview: %w", err)
 	}
 
 	return nil

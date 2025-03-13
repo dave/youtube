@@ -32,7 +32,7 @@ By default, Oracle blocks SSH. You need to open port **22**.
     - **Protocol**: `TCP`
     - **Destination Port Range**: `22`
     - **Save**
-5. Add the same for 443 and 80
+5. Add the same for 443 and 80 (if web needed)
 
 ---
 
@@ -133,7 +133,7 @@ To set a budget alert in Oracle Cloud (OCI) that notifies you if you spend more 
    Click Create Budget.
    Done! You’ll now get an email alert when spending crosses $1.
 
-## Set up iptables to let port 80 and 443 through
+## Set up iptables to let port 80 and 443 through (only if web needed)
 
 To configure LetsEncrypt, you need to allow port 80 as well as 443 through the firewall. Here’s how to do it:
 

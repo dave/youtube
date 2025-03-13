@@ -16,29 +16,38 @@ type Global struct {
 }
 
 type Expedition struct {
-	Ref              string
-	Name             string
-	Ready            bool
-	Process          bool
-	Thumbnails       bool
-	VideosFolder     string
-	ThumbnailsFolder string
-	Data             map[string]any
-	SectionsByRef    map[string]*Section
-	Sections         []*Section
-	Items            []*Item
-	Templates        *template.Template
+	RowId              int
+	Ref                string
+	Name               string
+	Ready              bool
+	Process            bool
+	Thumbnails         bool
+	VideosFolder       string
+	ThumbnailsFolder   string
+	ExpeditionPlaylist bool
+	SectionPlaylists   bool
+	Data               map[string]any
+	SectionsByRef      map[string]*Section
+	Sections           []*Section
+	Items              []*Item
+	Templates          *template.Template
+	PlaylistId         string
+	Playlist           *youtube.Playlist
 }
 
 type Section struct {
+	RowId      int
 	Expedition *Expedition
 	Items      []*Item
 	Ref        string
 	Name       string
 	Data       map[string]any
+	PlaylistId string
+	Playlist   *youtube.Playlist
 }
 
 type Item struct {
+	RowId         int
 	Type          string
 	Key           int
 	Video         bool
@@ -57,7 +66,7 @@ type Item struct {
 }
 
 func (item Item) Metadata() (string, error) {
-	metaData := Meta{
+	metaData := VideoMeta{
 		Version:    1,
 		Expedition: item.Expedition.Ref,
 		Type:       item.Type,
