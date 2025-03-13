@@ -9,7 +9,47 @@ import (
 	"os"
 
 	"golang.org/x/oauth2"
+	"golang.org/x/oauth2/google"
+	"google.golang.org/api/youtube/v3"
 )
+
+func (s *Service) InitialiseYoutubeAuthentication(ctx context.Context) error {
+
+	// Read OAuth2 credentials from file
+	// Create here: https://console.cloud.google.com/auth/clients?inv=1&invt=AbqgZQ&project=wildernessprime
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("getting home dir: %w", err)
+	}
+	oauth2Credentials, err := os.ReadFile(home + "/.config/wildernessprime/youtube-oauth2-client-secret.json")
+	if err != nil {
+		return fmt.Errorf("unable to read OAuth2 credentials file: %w", err)
+	}
+
+	config, err := google.ConfigFromJSON(
+		oauth2Credentials,
+		youtube.YoutubeReadonlyScope,
+		"https://www.googleapis.com/auth/youtube.force-ssl",
+	)
+	if err != nil {
+		return fmt.Errorf("unable to parse OAuth2 credentials file to config: %w", err)
+	}
+
+	token, err := getToken(config)
+	if err != nil {
+		return fmt.Errorf("unable to get token: %w", err)
+	}
+
+	client := config.Client(ctx, token)
+	youtubeService, err := youtube.New(client)
+	if err != nil {
+		return fmt.Errorf("unable to create YouTube client: %w", err)
+	}
+
+	s.YoutubeService = youtubeService
+
+	return nil
+}
 
 func getToken(config *oauth2.Config) (*oauth2.Token, error) {
 	home, err := os.UserHomeDir()

@@ -5,6 +5,8 @@ import (
 	"log"
 )
 
+const YOUTUBE_CHANNEL_ID = "UCFDggPICIlCHp3iOWMYt8cg"
+
 func main() {
 	ctx := context.Background()
 
