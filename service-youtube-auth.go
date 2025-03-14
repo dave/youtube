@@ -3,10 +3,14 @@ package main
 import (
 	"context"
 	"encoding/json"
+	"errors"
 	"fmt"
+	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
+	"strings"
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
@@ -28,7 +32,7 @@ func (s *Service) InitialiseYoutubeAuthentication(ctx context.Context) error {
 
 	config, err := google.ConfigFromJSON(
 		oauth2Credentials,
-		youtube.YoutubeReadonlyScope,
+		youtube.YoutubeUploadScope,
 		"https://www.googleapis.com/auth/youtube.force-ssl",
 	)
 	if err != nil {
@@ -47,6 +51,42 @@ func (s *Service) InitialiseYoutubeAuthentication(ctx context.Context) error {
 	}
 
 	s.YoutubeService = youtubeService
+
+	data := url.Values{}
+	data.Set("client_id", config.ClientID)
+	data.Set("client_secret", config.ClientSecret)
+	data.Set("refresh_token", token.RefreshToken)
+	data.Set("grant_type", "refresh_token")
+
+	req, err := http.NewRequest("POST", "https://oauth2.googleapis.com/token", strings.NewReader(data.Encode()))
+	if err != nil {
+		return fmt.Errorf("creating new token request: %w", err)
+	}
+	req.Header.Set("Content-Type", "application/x-www-form-urlencoded")
+
+	httpClient := &http.Client{}
+	resp, err := httpClient.Do(req)
+	if err != nil {
+		return fmt.Errorf("sending token request: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		errorMessage, _ := io.ReadAll(resp.Body)
+		return fmt.Errorf("failed to refresh token: %s", errorMessage)
+	}
+
+	var res map[string]interface{}
+	if err := json.NewDecoder(resp.Body).Decode(&res); err != nil {
+		return fmt.Errorf("parsing token response: %w", err)
+	}
+
+	accessToken, ok := res["access_token"].(string)
+	if !ok {
+		return errors.New("failed to extract access token")
+	}
+
+	s.YoutubeAccessToken = accessToken
 
 	return nil
 }

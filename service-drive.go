@@ -3,7 +3,9 @@ package main
 import (
 	"bytes"
 	"fmt"
+	"io"
 	"regexp"
+	"sync"
 
 	"google.golang.org/api/drive/v3"
 )
@@ -125,4 +127,84 @@ func getFilesInFolder(srv *drive.Service, folderId string) (map[string]*drive.Fi
 		}
 	}
 	return files, nil
+}
+
+type DriveReaderAt struct {
+	service  *drive.Service
+	fileID   string
+	mu       sync.Mutex
+	resp     io.ReadCloser // Current open response body
+	lastOff  int64         // Last read offset
+	lastSize int           // Last read size
+	closed   bool          // Track if the reader is closed
+}
+
+// NewDriveReaderAt initializes a DriveReaderAt.
+func NewDriveReaderAt(svc *drive.Service, fileID string) *DriveReaderAt {
+	return &DriveReaderAt{service: svc, fileID: fileID}
+}
+
+// ReadAt reads from Google Drive at a specific offset.
+func (d *DriveReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.closed {
+		return 0, fmt.Errorf("DriveReaderAt is closed")
+	}
+
+	// Check if we can reuse the existing response
+	if d.resp != nil && off == d.lastOff+int64(d.lastSize) {
+		n, err = io.ReadFull(d.resp, p)
+		if err == io.EOF {
+			d.resp.Close()
+			d.resp = nil
+		}
+		d.lastOff = off
+		d.lastSize = n
+		return n, err
+	}
+
+	// Close previous response if it exists (non-contiguous read)
+	if d.resp != nil {
+		d.resp.Close()
+		d.resp = nil
+	}
+
+	// Fetch the new byte range
+	req := d.service.Files.Get(d.fileID)
+	req.Header().Set("Range", fmt.Sprintf("bytes=%d-%d", off, off+int64(len(p))-1))
+
+	resp, err := req.Download()
+	if err != nil {
+		return 0, err
+	}
+
+	d.resp = resp.Body
+	d.lastOff = off
+	d.lastSize = len(p)
+
+	n, err = io.ReadFull(d.resp, p)
+	if err == io.EOF {
+		_ = d.resp.Close()
+		d.resp = nil
+	}
+	return n, err
+}
+
+// Close ensures the reader releases resources.
+func (d *DriveReaderAt) Close() error {
+	d.mu.Lock()
+	defer d.mu.Unlock()
+
+	if d.closed {
+		return nil
+	}
+
+	if d.resp != nil {
+		_ = d.resp.Close()
+		d.resp = nil
+	}
+	d.closed = true
+	return nil
 }

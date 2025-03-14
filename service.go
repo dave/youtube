@@ -12,13 +12,11 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
-const DO_SHEETS = true
-const DO_YOUTUBE = true
-
 type Service struct {
 	Global               *Global
 	SheetsService        *sheets.Service
 	YoutubeService       *youtube.Service
+	YoutubeAccessToken   string
 	ServiceAccountClient *http.Client
 	DriveService         *drive.Service
 	Spreadsheet          *sheets.Spreadsheet
@@ -39,16 +37,34 @@ func (s *Service) Init(ctx context.Context) error {
 	s.VideoPreviewData = map[*Item]map[string]any{}
 	s.PlaylistPreviewData = map[HasPlaylist]map[string]any{}
 
-	if err := s.InitialiseServiceAccount(ctx); err != nil {
-		return fmt.Errorf("unable to initialise service account: %w", err)
-	}
+	// INITIALISE AUTHENTICATION
+	{
+		if err := s.InitialiseServiceAccount(ctx); err != nil {
+			return fmt.Errorf("unable to initialise service account: %w", err)
+		}
 
-	if DO_SHEETS {
+		if err := s.InitialiseYoutubeAuthentication(ctx); err != nil {
+			return fmt.Errorf("unable to get videos: %w", err)
+		}
+
+		if err := s.InitDriveService(); err != nil {
+			return fmt.Errorf("unable to initialise drive service: %w", err)
+		}
 
 		if err := s.InitSheetsService(); err != nil {
 			return fmt.Errorf("init sheets service: %w", err)
 		}
+	}
 
+	// RESUME UPLOADER
+	{
+		if err := s.ResumePartialUpload(); err != nil {
+			return fmt.Errorf("unable to resume upload: %w", err)
+		}
+	}
+
+	// GET SHEET DATA
+	{
 		if err := s.GetSheetData("global", "expedition"); err != nil {
 			return fmt.Errorf("unable to get global / expedition sheet data: %w", err)
 		}
@@ -82,12 +98,8 @@ func (s *Service) Init(ctx context.Context) error {
 		}
 	}
 
-	if DO_YOUTUBE {
-
-		if err := s.InitialiseYoutubeAuthentication(ctx); err != nil {
-			return fmt.Errorf("unable to get videos: %w", err)
-		}
-
+	// GET DATA FROM YOUTUBE
+	{
 		if err := s.GetVideosData(); err != nil {
 			return fmt.Errorf("unable to get videos: %w", err)
 		}
@@ -103,19 +115,17 @@ func (s *Service) Init(ctx context.Context) error {
 		if err := s.ParsePlaylistsMetaData(); err != nil {
 			return fmt.Errorf("unable to parse playlists metadata: %w", err)
 		}
-
 	}
 
-	if err := s.InitDriveService(); err != nil {
-		return fmt.Errorf("unable to initialise drive service: %w", err)
+	// GET DATA FROM DRIVE
+	{
+		if err := s.FindDriveFiles(); err != nil {
+			return fmt.Errorf("unable to find drive files: %w", err)
+		}
 	}
 
-	if err := s.FindDriveFiles(); err != nil {
-		return fmt.Errorf("unable to find drive files: %w", err)
-	}
-
-	if DO_YOUTUBE {
-
+	// UPLOAD TO YOUTUBE
+	{
 		if err := s.CreateOrUpdateVideos(); err != nil {
 			return fmt.Errorf("updating videos: %w", err)
 		}
@@ -125,12 +135,16 @@ func (s *Service) Init(ctx context.Context) error {
 		}
 	}
 
-	if err := s.WriteVideosPreview(); err != nil {
-		return fmt.Errorf("unable to write videos preview: %w", err)
-	}
+	// WRITE PREVIEW DATA TO SHEET
+	{
 
-	if err := s.WritePlaylistsPreview(); err != nil {
-		return fmt.Errorf("unable to write playlists preview: %w", err)
+		if err := s.WriteVideosPreview(); err != nil {
+			return fmt.Errorf("unable to write videos preview: %w", err)
+		}
+
+		if err := s.WritePlaylistsPreview(); err != nil {
+			return fmt.Errorf("unable to write playlists preview: %w", err)
+		}
 	}
 
 	return nil

@@ -30,7 +30,7 @@ func updateThumbnail(s *Service, item *Item) error {
 
 	if s.Global.Preview {
 		s.StoreVideoPreview(item, "thumbnail_top", "", textTopBuffer.String())
-		s.StoreVideoPreview(item, "video_description", "", textBottomBuffer.String())
+		s.StoreVideoPreview(item, "thumbnail_bottom", "", textBottomBuffer.String())
 	} else {
 		fmt.Println("Updating thumbnail", item.String())
 		download, err := s.DriveService.Files.Get(item.ThumbnailFile.Id).Download()

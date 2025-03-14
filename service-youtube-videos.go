@@ -1,12 +1,14 @@
 package main
 
 import (
+	"context"
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"strings"
 	"time"
 
+	"github.com/dave/youtube2/uploader"
 	"google.golang.org/api/youtube/v3"
 )
 
@@ -177,6 +179,7 @@ func (s *Service) updateVideo(item *Item) error {
 	if err != nil {
 		return fmt.Errorf("applying data: %w", err)
 	}
+
 	if s.Global.Preview {
 		// store updated metadata
 		s.StoreVideoPreview(item, "video_title", changes.Title.Before, changes.Title.After)
@@ -193,15 +196,25 @@ func (s *Service) updateVideo(item *Item) error {
 			}
 		}
 	}
+
 	if item.Expedition.Thumbnails {
 		if err := updateThumbnail(s, item); err != nil {
 			return fmt.Errorf("updating thumbnails in insert: %w", err)
 		}
 	}
+
 	return nil
 }
 
 func (s *Service) createVideo(item *Item) error {
+
+	upl, err := s.getUploader()
+	if err != nil {
+		return fmt.Errorf("getting uploader: %w", err)
+	}
+	if upl.State == uploader.StateUploadInProgress {
+		return fmt.Errorf("upload already in progress")
+	}
 	video := &youtube.Video{}
 
 	changes, err := Apply(item, video)
@@ -215,43 +228,33 @@ func (s *Service) createVideo(item *Item) error {
 		s.StoreVideoPreview(item, "video_privacy_status", "", changes.PrivacyStatus.After)
 		s.StoreVideoPreview(item, "video_publish_at", "", changes.PublishAt.After)
 	} else {
-		fmt.Printf("Inserting video %s\n", item)
-
-		call := s.YoutubeService.Videos.Insert(ApiPartsInsert, video)
-
-		download, err := s.DriveService.Files.Get(item.VideoFile.Id).Download()
-		if err != nil {
-			return fmt.Errorf("downloading drive file: %w", err)
+		fmt.Printf("Uploading video %s\n", item)
+		progress := func(start int64) {
+			fmt.Printf(" - uploaded %d of %d bytes (%.2f%%)\n", start, upl.ContentLength, float64(start)/float64(upl.ContentLength)*100)
 		}
-
-		insertCall := call.Media(download.Body)
-
-		call.ProgressUpdater(func(current, total int64) {
-			fmt.Printf(" - uploaded %d of %d bytes (%.2f%%)\n", current, download.ContentLength, float64(current)/float64(download.ContentLength)*100)
-		})
-
-		insertCall.Header().Add("Slug", item.VideoFile.Name)
-
-		insertedVideo, err := insertCall.Do()
-		if err != nil {
-			_ = download.Body.Close() // ignore error
-			return fmt.Errorf("inserting video: %w", err)
+		if err := upl.Initialise(item.VideoFile.Id, video); err != nil {
+			return fmt.Errorf("initialising upload: %w", err)
 		}
-		_ = download.Body.Close() // ignore error
+		insertedVideo, err := upl.Upload(context.Background(), progress)
+		if err != nil {
+			return fmt.Errorf("uploading video: %w", err)
+		}
 
 		item.YoutubeVideo = insertedVideo
 		item.YoutubeId = insertedVideo.Id
 
-		if item.Expedition.Thumbnails {
-			if err := updateThumbnail(s, item); err != nil {
-				return fmt.Errorf("updating thumbnails in insert: %w", err)
-			}
+	}
+
+	if item.Expedition.Thumbnails {
+		if err := updateThumbnail(s, item); err != nil {
+			return fmt.Errorf("updating thumbnails in insert: %w", err)
 		}
 	}
+
 	return nil
 }
 
-func Apply(item *Item, video *youtube.Video) (changes Changes, err error) {
+func apply(item *Item) (YoutubeFields, error) {
 
 	fields := DefaultYoutubeFields()
 
@@ -259,20 +262,28 @@ func Apply(item *Item, video *youtube.Video) (changes Changes, err error) {
 
 	bufDescription := &strings.Builder{}
 	if err := item.Expedition.Templates.ExecuteTemplate(bufDescription, item.Template, item); err != nil {
-		return Changes{}, fmt.Errorf("error executing description template: %w", err)
+		return YoutubeFields{}, fmt.Errorf("error executing description template: %w", err)
 	}
 	metadata, err := item.Metadata()
 	if err != nil {
-		return Changes{}, fmt.Errorf("error getting metadata: %w", err)
+		return YoutubeFields{}, fmt.Errorf("error getting metadata: %w", err)
 	}
 	fields.Description = strings.TrimSpace(bufDescription.String()) + "\n\n{" + metadata + "}"
 
 	bufTitle := &strings.Builder{}
 	if err := item.Expedition.Templates.ExecuteTemplate(bufTitle, "title", item); err != nil {
-		return Changes{}, fmt.Errorf("error executing title template: %w", err)
+		return YoutubeFields{}, fmt.Errorf("error executing title template: %w", err)
 	}
 	fields.Title = bufTitle.String()
 
+	return fields, nil
+}
+
+func Apply(item *Item, video *youtube.Video) (changes Changes, err error) {
+	fields, err := apply(item)
+	if err != nil {
+		return Changes{}, fmt.Errorf("applying data: %w", err)
+	}
 	return fields.Apply(video), nil
 }
 
