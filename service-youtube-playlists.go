@@ -376,18 +376,22 @@ func (s *Service) syncPlaylist(parent HasPlaylist, input []*Item, output []*yout
 				ops = append(ops, fmt.Sprintf("insert at %d (%s)", outputIndex, v.YoutubeId))
 			} else {
 				fmt.Printf("Inserting playlist item: %s at position %d\n", v.YoutubeId, outputIndex)
-				_, err := s.YoutubeService.PlaylistItems.Insert([]string{"snippet"}, &youtube.PlaylistItem{
+				pli, err := s.YoutubeService.PlaylistItems.Insert([]string{"snippet"}, &youtube.PlaylistItem{
 					Snippet: &youtube.PlaylistItemSnippet{
 						PlaylistId: playlistId,
 						ResourceId: &youtube.ResourceId{
 							Kind:    "youtube#video",
 							VideoId: v.YoutubeId,
 						},
-						Position: int64(outputIndex), // Insert at correct position
+						// Position is ignored when inserting, must do an update fix.
 					},
 				}).Do()
 				if err != nil {
-					return fmt.Errorf("failed to insert video %s: %v", v.YoutubeId, err)
+					return fmt.Errorf("failed to insert playlist item %s: %v", v.YoutubeId, err)
+				}
+				pli.Snippet.Position = int64(outputIndex)
+				if _, err := s.YoutubeService.PlaylistItems.Update([]string{"snippet"}, pli).Do(); err != nil {
+					return fmt.Errorf("failed to update playlist item %s: %w", pli.Id, err)
 				}
 			}
 			outputIndex++ // Advance since we inserted
