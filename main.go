@@ -3,17 +3,13 @@ package main
 import (
 	"context"
 	"log"
+
+	"github.com/dave/youtube2/uploader"
 )
 
-const YOUTUBE_CHANNEL_ID = "UCFDggPICIlCHp3iOWMYt8cg"
-
 func main() {
-	ctx := context.Background()
-
-	service := &Service{}
-
-	if err := service.Init(ctx); err != nil {
+	service := uploader.New("UCFDggPICIlCHp3iOWMYt8cg")
+	if err := service.Start(context.Background()); err != nil {
 		log.Fatalf("Unable to initialise service: %v", err)
 	}
-
 }

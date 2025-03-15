@@ -142,3 +142,10 @@ sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 80 -j ACCEPT
 sudo iptables -I INPUT 6 -m state --state NEW -p tcp --dport 443 -j ACCEPT
 sudo netfilter-persistent save
 ```
+
+## oracle-ssh-key.key
+Create here: [Oracle VM](oracle.md).
+
+Public key: `oracle-ssh-key.key.pub`.
+
+- **Configure SSH key**: `chmod 600 ~/.ssh/oracle-ssh-key.key`

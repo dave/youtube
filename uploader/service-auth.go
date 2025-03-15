@@ -1,4 +1,4 @@
-package main
+package uploader
 
 import (
 	"context"
@@ -14,8 +14,34 @@ import (
 
 	"golang.org/x/oauth2"
 	"golang.org/x/oauth2/google"
+	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/youtube/v3"
 )
+
+func (s *Service) InitialiseServiceAccount(ctx context.Context) error {
+
+	// Create here: https://console.cloud.google.com/iam-admin/serviceaccounts/details/104677990570467761179/keys?inv=1&invt=AbqgZw&project=wildernessprime&supportedpurview=project
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return fmt.Errorf("getting home dir: %w", err)
+	}
+	serviceAccountToken, err := os.ReadFile(home + "/.config/wildernessprime/google-service-account-token.json")
+	if err != nil {
+		return fmt.Errorf("unable to read service account file: %w", err)
+	}
+
+	serviceAccountConfig, err := google.JWTConfigFromJSON(
+		serviceAccountToken,
+		drive.DriveScope,
+		"https://www.googleapis.com/auth/spreadsheets",
+	)
+	if err != nil {
+		return fmt.Errorf("unable to parse service account file to config: %w", err)
+	}
+	s.ServiceAccountClient = serviceAccountConfig.Client(ctx)
+
+	return nil
+}
 
 func (s *Service) InitialiseYoutubeAuthentication(ctx context.Context) error {
 
@@ -39,7 +65,7 @@ func (s *Service) InitialiseYoutubeAuthentication(ctx context.Context) error {
 		return fmt.Errorf("unable to parse OAuth2 credentials file to config: %w", err)
 	}
 
-	token, err := getToken(config)
+	token, err := getToken(ctx, config)
 	if err != nil {
 		return fmt.Errorf("unable to get token: %w", err)
 	}
@@ -91,7 +117,7 @@ func (s *Service) InitialiseYoutubeAuthentication(ctx context.Context) error {
 	return nil
 }
 
-func getToken(config *oauth2.Config) (*oauth2.Token, error) {
+func getToken(ctx context.Context, config *oauth2.Config) (*oauth2.Token, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("getting home dir: %w", err)
@@ -120,7 +146,7 @@ func getToken(config *oauth2.Config) (*oauth2.Token, error) {
 			</html>
 		`)
 		go func() {
-			srv.Shutdown(context.Background())
+			srv.Shutdown(ctx)
 		}()
 	})
 
@@ -136,7 +162,7 @@ func getToken(config *oauth2.Config) (*oauth2.Token, error) {
 	fmt.Printf("Go to the following link in your browser then type the authorization code: \n%v\n", authURL)
 
 	code := <-codeCh
-	token, err = config.Exchange(context.Background(), code)
+	token, err = config.Exchange(ctx, code)
 	if err != nil {
 		return nil, fmt.Errorf("unable to retrieve token from web: %w", err)
 	}

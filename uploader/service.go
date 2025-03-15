@@ -1,12 +1,10 @@
-package main
+package uploader
 
 import (
 	"context"
 	"fmt"
 	"net/http"
-	"os"
 
-	"golang.org/x/oauth2/google"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/youtube/v3"
@@ -14,6 +12,7 @@ import (
 
 type Service struct {
 	Global               *Global
+	ChannelId            string
 	SheetsService        *sheets.Service
 	YoutubeService       *youtube.Service
 	YoutubeAccessToken   string
@@ -28,8 +27,9 @@ type Service struct {
 	PlaylistPreviewData  map[HasPlaylist]map[string]any
 }
 
-func (s *Service) Init(ctx context.Context) error {
+func New(channelId string) *Service {
 
+	s := &Service{}
 	s.Sheets = map[string]*Sheet{}
 	s.Expeditions = map[string]*Expedition{}
 	s.YoutubeVideos = map[string]*youtube.Video{}
@@ -37,18 +37,29 @@ func (s *Service) Init(ctx context.Context) error {
 	s.VideoPreviewData = map[*Item]map[string]any{}
 	s.PlaylistPreviewData = map[HasPlaylist]map[string]any{}
 
+	s.ChannelId = channelId
+
+	return s
+}
+
+func (s *Service) Start(ctx context.Context) error {
+
+	if s.ChannelId == "" {
+		return fmt.Errorf("channel id is empty, use NewService to create a new *Service")
+	}
+
 	// INITIALISE AUTHENTICATION
 	{
 		if err := s.InitialiseServiceAccount(ctx); err != nil {
-			return fmt.Errorf("unable to initialise service account: %w", err)
+			return fmt.Errorf("init service account: %w", err)
 		}
 
 		if err := s.InitialiseYoutubeAuthentication(ctx); err != nil {
-			return fmt.Errorf("unable to get videos: %w", err)
+			return fmt.Errorf("init youtube auth: %w", err)
 		}
 
 		if err := s.InitDriveService(); err != nil {
-			return fmt.Errorf("unable to initialise drive service: %w", err)
+			return fmt.Errorf("init drive service: %w", err)
 		}
 
 		if err := s.InitSheetsService(); err != nil {
@@ -58,7 +69,7 @@ func (s *Service) Init(ctx context.Context) error {
 
 	// RESUME UPLOADER
 	{
-		if err := s.ResumePartialUpload(); err != nil {
+		if err := s.ResumePartialUpload(ctx); err != nil {
 			return fmt.Errorf("unable to resume upload: %w", err)
 		}
 	}
@@ -136,7 +147,7 @@ func (s *Service) Init(ctx context.Context) error {
 
 	// UPLOAD TO YOUTUBE
 	{
-		if err := s.CreateOrUpdateVideos(); err != nil {
+		if err := s.CreateOrUpdateVideos(ctx); err != nil {
 			return fmt.Errorf("updating videos: %w", err)
 		}
 
@@ -160,31 +171,6 @@ func (s *Service) Init(ctx context.Context) error {
 			return fmt.Errorf("unable to write playlists preview: %w", err)
 		}
 	}
-
-	return nil
-}
-
-func (s *Service) InitialiseServiceAccount(ctx context.Context) error {
-
-	// Create here: https://console.cloud.google.com/iam-admin/serviceaccounts/details/104677990570467761179/keys?inv=1&invt=AbqgZw&project=wildernessprime&supportedpurview=project
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return fmt.Errorf("getting home dir: %w", err)
-	}
-	serviceAccountToken, err := os.ReadFile(home + "/.config/wildernessprime/google-service-account-token.json")
-	if err != nil {
-		return fmt.Errorf("unable to read service account file: %w", err)
-	}
-
-	serviceAccountConfig, err := google.JWTConfigFromJSON(
-		serviceAccountToken,
-		drive.DriveScope,
-		"https://www.googleapis.com/auth/spreadsheets",
-	)
-	if err != nil {
-		return fmt.Errorf("unable to parse service account file to config: %w", err)
-	}
-	s.ServiceAccountClient = serviceAccountConfig.Client(ctx)
 
 	return nil
 }

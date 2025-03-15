@@ -1,4 +1,4 @@
-package main
+package uploader
 
 import (
 	"fmt"
@@ -522,4 +522,22 @@ func floatToTime(f float64) time.Time {
 	baseDate := time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC)
 	// Add the number of days (including fractional days) to the base date
 	return baseDate.Add(time.Duration(f * 24 * float64(time.Hour)))
+}
+
+func empty(v any) bool {
+	if v == nil {
+		return true
+	}
+	switch v := v.(type) {
+	case string:
+		return v == ""
+	}
+	return false
+}
+
+func stringify(v any) string {
+	if v == nil {
+		return ""
+	}
+	return v.(string)
 }

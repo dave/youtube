@@ -1,4 +1,4 @@
-package main
+package uploader
 
 import (
 	"bytes"
@@ -19,7 +19,7 @@ func (s *Service) GetPlaylistsData() error {
 	for !done {
 		playlistResponse, err := s.YoutubeService.Playlists.
 			List([]string{"snippet"}).
-			ChannelId(YOUTUBE_CHANNEL_ID).
+			ChannelId(s.ChannelId).
 			MaxResults(50).
 			PageToken(pageToken).
 			Do()
