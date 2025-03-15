@@ -152,50 +152,54 @@ func transformImage(file io.Reader, textTop, textBottom string) (io.Reader, erro
 	}
 	c.SetDst(rgba)
 
-	// Draw background
-	draw.Draw(
-		rgba,
-		image.Rectangle{
-			Min: image.Point{
-				X: rgba.Bounds().Max.X - posTop.X.Round() - 100,
-				Y: 90,
+	if textTop != "" {
+		// Draw background
+		draw.Draw(
+			rgba,
+			image.Rectangle{
+				Min: image.Point{
+					X: rgba.Bounds().Max.X - posTop.X.Round() - 100,
+					Y: 90,
+				},
+				Max: image.Point{
+					X: rgba.Bounds().Max.X,
+					Y: 225,
+				},
 			},
-			Max: image.Point{
-				X: rgba.Bounds().Max.X,
-				Y: 225,
-			},
-		},
-		image.NewUniform(color.NRGBA{0, 0, 0, 128}),
-		image.Point{},
-		draw.Over,
-	)
-	// Draw the text.
-	c.SetFont(bold)
-	_, err = c.DrawString(textTop, freetype.Pt(rgba.Bounds().Max.X-posTop.X.Round()-50, 180))
-	if err != nil {
-		return nil, fmt.Errorf("drawing textTop: %w", err)
+			image.NewUniform(color.NRGBA{0, 0, 0, 128}),
+			image.Point{},
+			draw.Over,
+		)
+		// Draw the text.
+		c.SetFont(bold)
+		_, err = c.DrawString(textTop, freetype.Pt(rgba.Bounds().Max.X-posTop.X.Round()-50, 180))
+		if err != nil {
+			return nil, fmt.Errorf("drawing textTop: %w", err)
+		}
 	}
 
-	draw.Draw(
-		rgba,
-		image.Rectangle{
-			Min: image.Point{
-				X: 0,
-				Y: height - 220,
+	if textBottom != "" {
+		draw.Draw(
+			rgba,
+			image.Rectangle{
+				Min: image.Point{
+					X: 0,
+					Y: height - 220,
+				},
+				Max: image.Point{
+					X: posBottom.X.Round() + 100,
+					Y: height - 85,
+				},
 			},
-			Max: image.Point{
-				X: posBottom.X.Round() + 100,
-				Y: height - 85,
-			},
-		},
-		image.NewUniform(color.NRGBA{0, 0, 0, 128}),
-		image.Point{},
-		draw.Over,
-	)
-	c.SetFont(regular)
-	_, err = c.DrawString(textBottom, freetype.Pt(50, height-130))
-	if err != nil {
-		return nil, fmt.Errorf("drawing font: %w", err)
+			image.NewUniform(color.NRGBA{0, 0, 0, 128}),
+			image.Point{},
+			draw.Over,
+		)
+		c.SetFont(regular)
+		_, err = c.DrawString(textBottom, freetype.Pt(50, height-130))
+		if err != nil {
+			return nil, fmt.Errorf("drawing font: %w", err)
+		}
 	}
 
 	r, w := io.Pipe()
