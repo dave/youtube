@@ -323,7 +323,12 @@ func (s *Service) ParseItems() error {
 				if empty(data[s+"_name"]) {
 					return Location{}
 				}
-				return Location{Name: data[s+"_name"].(string), Elevation: int(data[s+"_elevation"].(float64))}
+				elevation, ok := data[s+"_elevation"]
+				if ok {
+					return Location{Name: data[s+"_name"].(string), Elevation: int(elevation.(float64))}
+				} else {
+					return Location{Name: data[s+"_name"].(string)}
+				}
 			}
 			var via []Location
 			viaId := 1

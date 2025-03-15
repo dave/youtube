@@ -54,7 +54,7 @@ func (s *Service) FindDriveFiles() error {
 			if !item.Ready {
 				continue // ignore all items which aren't ready
 			}
-			needVideo := item.YoutubeVideo == nil
+			needVideo := item.YoutubeVideo == nil && s.Global.Production
 			needThumbnail := expedition.Thumbnails
 
 			if !needVideo && !needThumbnail {
