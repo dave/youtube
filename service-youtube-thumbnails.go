@@ -15,7 +15,38 @@ import (
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
 	"golang.org/x/image/font"
+	"google.golang.org/api/drive/v3"
 )
+
+func (s *Service) UpdateThumbnails() error {
+	// find all the videos which need to be updated
+	for _, expedition := range s.Expeditions {
+		if !expedition.Process {
+			continue
+		}
+		if !expedition.Ready {
+			continue
+		}
+		if !expedition.Thumbnails {
+			continue
+		}
+		for _, item := range expedition.Items {
+			if !item.Video {
+				continue
+			}
+			if !item.Ready {
+				continue
+			}
+			if item.YoutubeVideo == nil {
+				continue
+			}
+			if err := updateThumbnail(s, item); err != nil {
+				return fmt.Errorf("updating thumbnail: %w", err)
+			}
+		}
+	}
+	return nil
+}
 
 func updateThumbnail(s *Service, item *Item) error {
 
@@ -28,21 +59,30 @@ func updateThumbnail(s *Service, item *Item) error {
 		return fmt.Errorf("execute thumbnail top template: %w", err)
 	}
 
+	fmt.Println("Updating thumbnail", item.String())
+	download, err := s.DriveService.Files.Get(item.ThumbnailFile.Id).Download()
+	if err != nil {
+		return fmt.Errorf("downloading drive file: %w", err)
+	}
+	f, err := transformImage(download.Body, textTopBuffer.String(), textBottomBuffer.String())
+	if err != nil {
+		_ = download.Body.Close()
+		return fmt.Errorf("transforming thumbnail: %w", err)
+	}
+	_ = download.Body.Close()
+
 	if s.Global.Preview {
 		s.StoreVideoPreview(item, "thumbnail_top", "", textTopBuffer.String())
 		s.StoreVideoPreview(item, "thumbnail_bottom", "", textBottomBuffer.String())
-	} else {
-		fmt.Println("Updating thumbnail", item.String())
-		download, err := s.DriveService.Files.Get(item.ThumbnailFile.Id).Download()
-		if err != nil {
-			return fmt.Errorf("downloading drive file: %w", err)
+		fileMetadata := &drive.File{
+			Name:    item.String(),
+			Parents: []string{s.Global.PreviewThumbnailsFolder},
 		}
-		f, err := transformImage(download.Body, textTopBuffer.String(), textBottomBuffer.String())
-		if err != nil {
-			_ = download.Body.Close()
-			return fmt.Errorf("transforming thumbnail: %w", err)
+		if _, err := s.DriveService.Files.Create(fileMetadata).Media(f).Do(); err != nil {
+			return fmt.Errorf("creating file: %w", err)
 		}
-		_ = download.Body.Close()
+	}
+	if s.Global.Production {
 		if _, err := s.YoutubeService.Thumbnails.Set(item.YoutubeVideo.Id).Media(f).Do(); err != nil {
 			return fmt.Errorf("setting thumbnail: %w", err)
 		}

@@ -21,6 +21,19 @@ func (s *Service) InitDriveService() error {
 	return nil
 }
 
+func (s *Service) ClearPreviewFolder() error {
+	if !s.Global.Preview {
+		return nil
+	}
+
+	fmt.Println("Clearing preview folder")
+
+	if err := deleteAllFilesInFolder(s.DriveService, s.Global.PreviewThumbnailsFolder); err != nil {
+		return fmt.Errorf("clearing preview folder: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) FindDriveFiles() error {
 
 	for _, expedition := range s.Expeditions {
@@ -93,7 +106,6 @@ func (s *Service) FindDriveFiles() error {
 				for filename := range thumbnailFiles {
 					if thumbnailFilenameRegex.MatchString(filename) {
 						item.ThumbnailFile = thumbnailFiles[filename]
-						fmt.Println("Found thumbnail file", item.String(), item.ThumbnailFile.Name)
 						break
 					}
 				}
@@ -127,6 +139,24 @@ func getFilesInFolder(srv *drive.Service, folderId string) (map[string]*drive.Fi
 		}
 	}
 	return files, nil
+}
+
+func deleteAllFilesInFolder(srv *drive.Service, folderId string) error {
+	// Step 1: List all files in the folder
+	query := fmt.Sprintf("'%s' in parents and trashed = false", folderId)
+	fileList, err := srv.Files.List().Q(query).Fields("files(id)").Do()
+	if err != nil {
+		return fmt.Errorf("listing files: %w", err)
+	}
+
+	// Step 2: Delete each file
+	for _, file := range fileList.Files {
+		if err := srv.Files.Delete(file.Id).Do(); err != nil {
+			return fmt.Errorf("deleting file %s: %w", file.Id, err)
+		}
+	}
+
+	return nil
 }
 
 type DriveReaderAt struct {

@@ -11,8 +11,26 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
+type Sheet struct {
+	Name       string
+	Expedition *Expedition
+	Headers    []string
+	Data       []map[string]interface{}
+	DataByRef  map[string]map[string]interface{}
+}
+
+func (s *Sheet) FullName() string {
+	if s.Expedition != nil {
+		return s.Expedition.Ref + " - " + s.Name
+	} else {
+		return s.Name
+	}
+}
+
 type Global struct {
-	Preview bool
+	Preview                 bool
+	Production              bool
+	PreviewThumbnailsFolder string
 }
 
 type Expedition struct {
@@ -65,6 +83,11 @@ type Item struct {
 	YoutubeVideo  *youtube.Video
 }
 
+type Location struct {
+	Name      string
+	Elevation int
+}
+
 func (item Item) Metadata() (string, error) {
 	metaData := VideoMeta{
 		Version:    1,
@@ -85,25 +108,4 @@ func (item Item) String() string {
 		section = item.Section.Ref + " "
 	}
 	return fmt.Sprintf("[%s %s %s%d]", item.Expedition.Ref, item.Type, section, item.Key)
-}
-
-type Location struct {
-	Name      string
-	Elevation int
-}
-
-type Sheet struct {
-	Name       string
-	Expedition *Expedition
-	Headers    []string
-	Data       []map[string]interface{}
-	DataByRef  map[string]map[string]interface{}
-}
-
-func (s *Sheet) FullName() string {
-	if s.Expedition != nil {
-		return s.Expedition.Ref + " - " + s.Name
-	} else {
-		return s.Name
-	}
 }

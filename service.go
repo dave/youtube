@@ -98,6 +98,16 @@ func (s *Service) Init(ctx context.Context) error {
 		}
 	}
 
+	// CLEAR PREVIEW SHEET AND FOLDER
+	{
+		if err := s.ClearPreviewSheet(); err != nil {
+			return fmt.Errorf("unable to clear preview sheet: %w", err)
+		}
+		if err := s.ClearPreviewFolder(); err != nil {
+			return fmt.Errorf("unable to clear preview folder: %w", err)
+		}
+	}
+
 	// GET DATA FROM YOUTUBE
 	{
 		if err := s.GetVideosData(); err != nil {
@@ -133,6 +143,10 @@ func (s *Service) Init(ctx context.Context) error {
 		if err := s.CreateOrUpdatePlaylists(); err != nil {
 			return fmt.Errorf("updating playlists: %w", err)
 		}
+
+		if err := s.UpdateThumbnails(); err != nil {
+			return fmt.Errorf("updating thumbnails: %w", err)
+		}
 	}
 
 	// WRITE PREVIEW DATA TO SHEET
@@ -164,7 +178,7 @@ func (s *Service) InitialiseServiceAccount(ctx context.Context) error {
 
 	serviceAccountConfig, err := google.JWTConfigFromJSON(
 		serviceAccountToken,
-		drive.DriveReadonlyScope,
+		drive.DriveScope,
 		"https://www.googleapis.com/auth/spreadsheets",
 	)
 	if err != nil {

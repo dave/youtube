@@ -28,6 +28,25 @@ func (s *Service) InitSheetsService() error {
 	return nil
 }
 
+func (s *Service) ClearPreviewSheet() error {
+	if !s.Global.Preview {
+		return nil
+	}
+
+	fmt.Println("Clearing preview sheet")
+
+	// clear "preview_videos" sheet, but leave first row (headers)
+	_, err := s.SheetsService.Spreadsheets.Values.Clear(
+		SPREADSHEET_ID,
+		fmt.Sprintf("%s!2:1000", "preview_videos"),
+		&sheets.ClearValuesRequest{},
+	).Do()
+	if err != nil {
+		return fmt.Errorf("unable to clear preview_videos sheet data: %w", err)
+	}
+	return nil
+}
+
 func (s *Service) GetAllSheetsData() error {
 	for _, sheetData := range s.Spreadsheet.Sheets {
 		skip := map[string]bool{
@@ -105,7 +124,9 @@ func (s *Service) GetSheetData(titles ...string) error {
 
 func (s *Service) ParseGlobal() error {
 	s.Global = &Global{
-		Preview: s.Sheets["global"].DataByRef["preview"]["value"].(bool),
+		Preview:                 s.Sheets["global"].DataByRef["preview"]["value"].(bool),
+		Production:              s.Sheets["global"].DataByRef["production"]["value"].(bool),
+		PreviewThumbnailsFolder: s.Sheets["global"].DataByRef["preview_thumbnails_folder"]["value"].(string),
 	}
 
 	return nil
@@ -115,16 +136,6 @@ func (s *Service) WriteVideosPreview() error {
 
 	if !s.Global.Preview {
 		return nil
-	}
-
-	// clear "preview_videos" sheet, but leave first row (headers)
-	_, err := s.SheetsService.Spreadsheets.Values.Clear(
-		SPREADSHEET_ID,
-		fmt.Sprintf("%s!2:1000", "preview_videos"),
-		&sheets.ClearValuesRequest{},
-	).Do()
-	if err != nil {
-		return fmt.Errorf("unable to clear preview_videos sheet data: %w", err)
 	}
 
 	// write preview data
@@ -164,7 +175,7 @@ func (s *Service) WriteVideosPreview() error {
 	}
 
 	// Execute the append request
-	_, err = s.SheetsService.Spreadsheets.Values.Append(SPREADSHEET_ID, rangeToAppend, valueRange).
+	_, err := s.SheetsService.Spreadsheets.Values.Append(SPREADSHEET_ID, rangeToAppend, valueRange).
 		ValueInputOption("RAW").
 		InsertDataOption("INSERT_ROWS").
 		Do()

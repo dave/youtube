@@ -5,6 +5,7 @@ import (
 	"encoding/base64"
 	"encoding/json"
 	"fmt"
+	"regexp"
 	"strings"
 	"time"
 
@@ -12,7 +13,11 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
+var MetaRegex = regexp.MustCompile(`\n{(.*)}$`)
+
 func (s *Service) GetVideosData() error {
+
+	apiPartsRead := []string{"snippet", "localizations", "status", "fileDetails"}
 
 	channelsResponse, _ := s.YoutubeService.Channels.
 		List([]string{"contentDetails"}).
@@ -43,7 +48,7 @@ func (s *Service) GetVideosData() error {
 		}
 
 		videosResponse, err := s.YoutubeService.Videos.
-			List(ApiPartsRead).
+			List(apiPartsRead).
 			Id(strings.Join(ids, ",")).
 			Do()
 		if err != nil {
@@ -68,7 +73,7 @@ func (s *Service) GetVideosData() error {
 		// one video is always missing from results
 		// https://issuetracker.google.com/issues/402138565
 		missingVideoResponse, err := s.YoutubeService.Videos.
-			List(ApiPartsRead).
+			List(apiPartsRead).
 			Id("POHhwrogJ8U").
 			Do()
 		if err != nil {
@@ -186,20 +191,16 @@ func (s *Service) updateVideo(item *Item) error {
 		s.StoreVideoPreview(item, "video_description", changes.Description.Before, changes.Description.After)
 		s.StoreVideoPreview(item, "video_privacy_status", changes.PrivacyStatus.Before, changes.PrivacyStatus.After)
 		s.StoreVideoPreview(item, "video_publish_at", changes.PublishAt.Before, changes.PublishAt.After)
-	} else {
+	}
+	if s.Global.Production {
 		if changes.Changed {
 			fmt.Printf("Updating video %s\n", item)
 			// clear FileDetails because it's not updatable
 			item.YoutubeVideo.FileDetails = nil
-			if _, err := s.YoutubeService.Videos.Update(ApiPartsUpdate, item.YoutubeVideo).Do(); err != nil {
+			parts := []string{"snippet", "localizations", "status"}
+			if _, err := s.YoutubeService.Videos.Update(parts, item.YoutubeVideo).Do(); err != nil {
 				return fmt.Errorf("updating video: %w", err)
 			}
-		}
-	}
-
-	if item.Expedition.Thumbnails {
-		if err := updateThumbnail(s, item); err != nil {
-			return fmt.Errorf("updating thumbnails in insert: %w", err)
 		}
 	}
 
@@ -227,7 +228,8 @@ func (s *Service) createVideo(item *Item) error {
 		s.StoreVideoPreview(item, "video_description", "", changes.Description.After)
 		s.StoreVideoPreview(item, "video_privacy_status", "", changes.PrivacyStatus.After)
 		s.StoreVideoPreview(item, "video_publish_at", "", changes.PublishAt.After)
-	} else {
+	}
+	if s.Global.Production {
 		fmt.Printf("Uploading video %s\n", item)
 		progress := func(start int64) {
 			fmt.Printf(" - uploaded %d of %d bytes (%.2f%%)\n", start, upl.ContentLength, float64(start)/float64(upl.ContentLength)*100)
@@ -243,12 +245,6 @@ func (s *Service) createVideo(item *Item) error {
 		item.YoutubeVideo = insertedVideo
 		item.YoutubeId = insertedVideo.Id
 
-	}
-
-	if item.Expedition.Thumbnails {
-		if err := updateThumbnail(s, item); err != nil {
-			return fmt.Errorf("updating thumbnails in insert: %w", err)
-		}
 	}
 
 	return nil

@@ -220,13 +220,15 @@ func (s *Service) updatePlaylist(parent HasPlaylist) error {
 	if s.Global.Preview {
 		s.StorePlaylistPreview(parent, "playlist_title", playlist.Snippet.Title, title)
 		s.StorePlaylistPreview(parent, "playlist_description", playlist.Snippet.Description, description)
-	} else {
+	}
+	if s.Global.Production {
 		if title != playlist.Snippet.Title || description != playlist.Snippet.Description {
 			// update playlist
 			playlist.Snippet.Title = title
 			playlist.Snippet.Description = description
 			playlist.Snippet.DefaultLanguage = "en"
-			if _, err := s.YoutubeService.Playlists.Update(ApiPartsUpdate, playlist).Do(); err != nil {
+			parts := []string{"snippet", "localizations", "status"}
+			if _, err := s.YoutubeService.Playlists.Update(parts, playlist).Do(); err != nil {
 				return fmt.Errorf("updating playlist: %w", err)
 			}
 		}
@@ -354,7 +356,8 @@ func (s *Service) syncPlaylist(parent HasPlaylist, input []*Item, output []*yout
 		if !lcsSet[videoId] {
 			if s.Global.Preview {
 				ops = append(ops, fmt.Sprintf("delete at %d (%s)", i, videoId))
-			} else {
+			}
+			if s.Global.Production {
 				fmt.Printf("Deleting playlist item: %s\n", videoId)
 				if err := s.YoutubeService.PlaylistItems.Delete(item.Id).Do(); err != nil {
 					return fmt.Errorf("failed to delete video %s: %v", videoId, err)
@@ -374,7 +377,8 @@ func (s *Service) syncPlaylist(parent HasPlaylist, input []*Item, output []*yout
 		} else {
 			if s.Global.Preview {
 				ops = append(ops, fmt.Sprintf("insert at %d (%s)", outputIndex, v.YoutubeId))
-			} else {
+			}
+			if s.Global.Production {
 				fmt.Printf("Inserting playlist item: %s at position %d\n", v.YoutubeId, outputIndex)
 				pli, err := s.YoutubeService.PlaylistItems.Insert([]string{"snippet"}, &youtube.PlaylistItem{
 					Snippet: &youtube.PlaylistItemSnippet{
@@ -383,12 +387,12 @@ func (s *Service) syncPlaylist(parent HasPlaylist, input []*Item, output []*yout
 							Kind:    "youtube#video",
 							VideoId: v.YoutubeId,
 						},
-						// Position is ignored when inserting, must do an update fix.
 					},
 				}).Do()
 				if err != nil {
 					return fmt.Errorf("failed to insert playlist item %s: %v", v.YoutubeId, err)
 				}
+				// Position is ignored when inserting, must do an update fix.
 				pli.Snippet.Position = int64(outputIndex)
 				if _, err := s.YoutubeService.PlaylistItems.Update([]string{"snippet"}, pli).Do(); err != nil {
 					return fmt.Errorf("failed to update playlist item %s: %w", pli.Id, err)
@@ -418,7 +422,8 @@ func (s *Service) createPlaylist(parent HasPlaylist) error {
 			ops = append(ops, fmt.Sprintf("insert (%s)", item.YoutubeId))
 		}
 		s.StorePlaylistPreviewOps(parent, "playlist_content", ops)
-	} else {
+	}
+	if s.Global.Production {
 		playlist := &youtube.Playlist{
 			Snippet: &youtube.PlaylistSnippet{
 				Title:           title,
@@ -471,7 +476,8 @@ func (s *Service) deletePlaylist(parent HasPlaylist) error {
 	playlist := parent.GetPlaylist()
 	if s.Global.Preview {
 		s.StorePlaylistPreviewDeleted(parent)
-	} else {
+	}
+	if s.Global.Production {
 		fmt.Println("Deleting playlist", parent.GetPlaylistId())
 		if err := s.YoutubeService.Playlists.Delete(playlist.Id).Do(); err != nil {
 			return fmt.Errorf("deleting playlist: %w", err)

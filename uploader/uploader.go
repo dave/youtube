@@ -125,25 +125,6 @@ func (u *Uploader) Initialise(contentFile string, data *youtube.Video) error {
 	return nil
 }
 
-//type VideoMetadata struct {
-//	Snippet *MetadataSnippet `json:"snippet"`
-//	Status  *MetadataStatus  `json:"status"`
-//}
-//
-//type MetadataSnippet struct {
-//	Title                string `json:"title"`
-//	Description          string `json:"description"`
-//	CategoryId           string `json:"categoryId"`
-//	ChannelId            string `json:"channelId"`
-//	DefaultAudioLanguage string `json:"defaultAudioLanguage"`
-//	DefaultLanguage      string `json:"defaultLanguage"`
-//	LiveBroadcastContent string `json:"liveBroadcastContent"`
-//}
-//type MetadataStatus struct {
-//	PrivacyStatus string `json:"privacyStatus"`
-//	PublishAt     string `json:"publishAt"`
-//}
-
 type State struct {
 	UploadUrl     string `json:"upload_url"`
 	ContentFile   string `json:"content_file"`
