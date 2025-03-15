@@ -1,26 +1,26 @@
-package uploader
+package upload
 
 import (
 	"context"
 	"fmt"
 	"os"
-)
 
-const CHUNK_SIZE = 1024 * 1024 * 16
+	"github.com/dave/youtube2/resume"
+)
 
 func (s *Service) ResumePartialUpload(ctx context.Context) error {
 
-	upl, err := s.getUploader()
+	res, err := s.getResume()
 	if err != nil {
 		return fmt.Errorf("getting uploader: %w", err)
 	}
 
-	if upl.State == resumer.StateUploadInProgress {
+	if res.State == resume.StateUploadInProgress {
 		progress := func(start int64) {
-			fmt.Printf(" - uploaded %d of %d bytes (%.2f%%)\n", start, upl.ContentLength, float64(start)/float64(upl.ContentLength)*100)
+			fmt.Printf(" - uploaded %d of %d bytes (%.2f%%)\n", start, res.ContentLength, float64(start)/float64(res.ContentLength)*100)
 		}
 		fmt.Println("Unfinished upload found... resuming:")
-		video, err := upl.Upload(ctx, progress)
+		video, err := res.Upload(ctx, progress)
 		if err != nil {
 			return fmt.Errorf("unable to upload: %w", err)
 		}
@@ -30,22 +30,22 @@ func (s *Service) ResumePartialUpload(ctx context.Context) error {
 	return nil
 }
 
-func (s *Service) getUploader() (*resumer.Uploader, error) {
+func (s *Service) getResume() (*resume.Service, error) {
 	home, err := os.UserHomeDir()
 	if err != nil {
 		return nil, fmt.Errorf("getting home dir: %w", err)
 	}
 	stateFilePath := home + "/.config/wildernessprime/uploader-state.json"
 
-	upl, err := resumer.NewGoogleDriveUploader(
+	res, err := resume.NewGoogleDrive(
 		s.DriveService,
 		s.YoutubeAccessToken,
-		CHUNK_SIZE,
+		1024*1024*16, // 16MB
 		stateFilePath,
 	)
 	if err != nil {
 		return nil, fmt.Errorf("initialising uploader: %w", err)
 	}
-	return upl, nil
+	return res, nil
 
 }

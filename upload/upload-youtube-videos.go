@@ -1,4 +1,4 @@
-package uploader
+package upload
 
 import (
 	"context"
@@ -9,6 +9,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/dave/youtube2/resume"
 	"google.golang.org/api/youtube/v3"
 )
 
@@ -208,11 +209,11 @@ func (s *Service) updateVideo(item *Item) error {
 
 func (s *Service) createVideo(ctx context.Context, item *Item) error {
 
-	upl, err := s.getUploader()
+	res, err := s.getResume()
 	if err != nil {
 		return fmt.Errorf("getting uploader: %w", err)
 	}
-	if upl.State == resumer.StateUploadInProgress {
+	if res.State == resume.StateUploadInProgress {
 		return fmt.Errorf("upload already in progress")
 	}
 	video := &youtube.Video{}
@@ -231,12 +232,12 @@ func (s *Service) createVideo(ctx context.Context, item *Item) error {
 	if s.Global.Production {
 		fmt.Printf("Uploading video %s\n", item)
 		progress := func(start int64) {
-			fmt.Printf(" - uploaded %d of %d bytes (%.2f%%)\n", start, upl.ContentLength, float64(start)/float64(upl.ContentLength)*100)
+			fmt.Printf(" - uploaded %d of %d bytes (%.2f%%)\n", start, res.ContentLength, float64(start)/float64(res.ContentLength)*100)
 		}
-		if err := upl.Initialise(item.VideoFile.Id, video); err != nil {
+		if err := res.Initialise(item.VideoFile.Id, video); err != nil {
 			return fmt.Errorf("initialising upload: %w", err)
 		}
-		insertedVideo, err := upl.Upload(ctx, progress)
+		insertedVideo, err := res.Upload(ctx, progress)
 		if err != nil {
 			return fmt.Errorf("uploading video: %w", err)
 		}

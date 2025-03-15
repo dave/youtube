@@ -1,4 +1,4 @@
-package resumer
+package resume
 
 import (
 	"bytes"
@@ -16,7 +16,7 @@ import (
 	"google.golang.org/api/youtube/v3"
 )
 
-type Uploader struct {
+type Service struct {
 	State         uploaderState
 	Location      fileLocation
 	AccessToken   string
@@ -28,9 +28,9 @@ type Uploader struct {
 	ContentLength int64
 }
 
-func NewLocalFileUploader(youtubeAccessToken string, chunkSize int64, stateFilePath string) (*Uploader, error) {
+func NewLocalFile(youtubeAccessToken string, chunkSize int64, stateFilePath string) (*Service, error) {
 
-	u := &Uploader{
+	u := &Service{
 		Location:    LocationLocal,
 		AccessToken: youtubeAccessToken,
 		ChunkSize:   chunkSize,
@@ -46,9 +46,9 @@ func NewLocalFileUploader(youtubeAccessToken string, chunkSize int64, stateFileP
 	return u, nil
 }
 
-func NewGoogleDriveUploader(driveService *drive.Service, youtubeAccessToken string, chunkSize int64, stateFilePath string) (*Uploader, error) {
+func NewGoogleDrive(driveService *drive.Service, youtubeAccessToken string, chunkSize int64, stateFilePath string) (*Service, error) {
 
-	u := &Uploader{
+	u := &Service{
 		Location:     LocationGoogleDrive,
 		DriveService: driveService,
 		AccessToken:  youtubeAccessToken,
@@ -65,12 +65,12 @@ func NewGoogleDriveUploader(driveService *drive.Service, youtubeAccessToken stri
 	return u, nil
 }
 
-func (u *Uploader) Initialise(contentFile string, data *youtube.Video) error {
-	if u.State == StateUploadInProgress {
+func (s *Service) Initialise(contentFile string, data *youtube.Video) error {
+	if s.State == StateUploadInProgress {
 		return fmt.Errorf("upload already in progress")
 	}
-	u.ContentFile = contentFile
-	switch u.Location {
+	s.ContentFile = contentFile
+	switch s.Location {
 	case LocationLocal:
 		file, err := os.Open(contentFile)
 		if err != nil {
@@ -81,13 +81,13 @@ func (u *Uploader) Initialise(contentFile string, data *youtube.Video) error {
 		if err != nil {
 			return fmt.Errorf("getting file info: %w", err)
 		}
-		u.ContentLength = fileInfo.Size()
+		s.ContentLength = fileInfo.Size()
 	case LocationGoogleDrive:
-		sizeResponse, err := u.DriveService.Files.Get(u.ContentFile).Fields("size").Do()
+		sizeResponse, err := s.DriveService.Files.Get(s.ContentFile).Fields("size").Do()
 		if err != nil {
 			return fmt.Errorf("getting size of content: %w", err)
 		}
-		u.ContentLength = sizeResponse.Size
+		s.ContentLength = sizeResponse.Size
 	}
 
 	dataBytes, err := json.Marshal(data)
@@ -100,9 +100,9 @@ func (u *Uploader) Initialise(contentFile string, data *youtube.Video) error {
 		return fmt.Errorf("creating new http request: %w", err)
 	}
 
-	req.Header.Set("Authorization", "Bearer "+u.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+s.AccessToken)
 	req.Header.Set("Content-Type", "application/json; charset=UTF-8")
-	req.Header.Set("X-Upload-Content-Length", fmt.Sprintf("%d", u.ContentLength))
+	req.Header.Set("X-Upload-Content-Length", fmt.Sprintf("%d", s.ContentLength))
 	req.Header.Set("X-Upload-Content-Type", "video/*")
 
 	client := &http.Client{}
@@ -116,9 +116,9 @@ func (u *Uploader) Initialise(contentFile string, data *youtube.Video) error {
 		return fmt.Errorf("failed to initiate upload, status %d: %v", resp.StatusCode, resp.Status)
 	}
 
-	u.UploadURL = resp.Header.Get("Location")
+	s.UploadURL = resp.Header.Get("Location")
 
-	if err := u.saveState(); err != nil {
+	if err := s.saveState(); err != nil {
 		return fmt.Errorf("saving state: %w", err)
 	}
 
@@ -131,24 +131,24 @@ type State struct {
 	ContentLength int64  `json:"content_length"`
 }
 
-func (u *Uploader) saveState() error {
+func (s *Service) saveState() error {
 	state := State{
-		UploadUrl:     u.UploadURL,
-		ContentFile:   u.ContentFile,
-		ContentLength: u.ContentLength,
+		UploadUrl:     s.UploadURL,
+		ContentFile:   s.ContentFile,
+		ContentLength: s.ContentLength,
 	}
 	stateMarshalled, err := json.Marshal(state)
 	if err != nil {
 		return fmt.Errorf("marshalling state: %w", err)
 	}
-	if err := os.WriteFile(u.StateFile, stateMarshalled, 0644); err != nil {
+	if err := os.WriteFile(s.StateFile, stateMarshalled, 0644); err != nil {
 		return fmt.Errorf("saving state: %w", err)
 	}
 	return nil
 }
 
-func (u *Uploader) loadState() (uploaderState, error) {
-	data, err := os.ReadFile(u.StateFile)
+func (s *Service) loadState() (uploaderState, error) {
+	data, err := os.ReadFile(s.StateFile)
 	if err != nil {
 		if errors.Is(err, os.ErrNotExist) {
 			return StateIdle, nil
@@ -159,20 +159,20 @@ func (u *Uploader) loadState() (uploaderState, error) {
 	if err := json.Unmarshal(data, state); err != nil {
 		return 0, fmt.Errorf("unmarshalling state: %w", err)
 	}
-	u.UploadURL = state.UploadUrl
-	u.ContentFile = state.ContentFile
-	u.ContentLength = state.ContentLength
+	s.UploadURL = state.UploadUrl
+	s.ContentFile = state.ContentFile
+	s.ContentLength = state.ContentLength
 	return StateUploadInProgress, nil
 }
 
-func (u *Uploader) resume() (finished bool, video *youtube.Video, next int64, err error) {
-	req, err := http.NewRequest("PUT", u.UploadURL, nil)
+func (s *Service) resume() (finished bool, video *youtube.Video, next int64, err error) {
+	req, err := http.NewRequest("PUT", s.UploadURL, nil)
 	if err != nil {
 		return false, nil, 0, fmt.Errorf("creating new upload request: %w", err)
 	}
-	req.Header.Set("Authorization", "Bearer "+u.AccessToken)
+	req.Header.Set("Authorization", "Bearer "+s.AccessToken)
 	req.Header.Set("Content-Length", "0")
-	req.Header.Set("Content-Range", fmt.Sprintf("bytes */%d", u.ContentLength))
+	req.Header.Set("Content-Range", fmt.Sprintf("bytes */%d", s.ContentLength))
 
 	client := &http.Client{}
 	resp, err := client.Do(req)
@@ -184,7 +184,7 @@ func (u *Uploader) resume() (finished bool, video *youtube.Video, next int64, er
 	switch getStatus(resp.StatusCode) {
 	case StatusDone:
 		// file uploaded successfully, remove state file
-		if err := os.Remove(u.StateFile); err != nil {
+		if err := os.Remove(s.StateFile); err != nil {
 			return true, nil, 0, fmt.Errorf("removing state file: %w", err)
 		}
 		// read response body for video information
@@ -209,23 +209,23 @@ func (u *Uploader) resume() (finished bool, video *youtube.Video, next int64, er
 		return false, nil, uploadedBytes + 1, nil
 	default: // StatusFailed
 		// upload permanently failed, remove state file (and ignore error)
-		_ = os.Remove(u.StateFile)
+		_ = os.Remove(s.StateFile)
 		// read response body for error message
 		errorMessage, _ := io.ReadAll(resp.Body)
 		return false, nil, 0, fmt.Errorf("resume failed, status %d: %s", resp.StatusCode, errorMessage)
 	}
 }
 
-func (u *Uploader) Upload(ctx context.Context, progress func(int64)) (*youtube.Video, error) {
-	switch u.Location {
+func (s *Service) Upload(ctx context.Context, progress func(int64)) (*youtube.Video, error) {
+	switch s.Location {
 	case LocationLocal:
-		video, err := u.uploadFile(progress)
+		video, err := s.uploadFile(progress)
 		if err != nil {
 			return nil, fmt.Errorf("uploading local file: %w", err)
 		}
 		return video, nil
 	default: // LocationGoogleDrive
-		video, err := u.uploadFromDrive(ctx, progress)
+		video, err := s.uploadFromDrive(ctx, progress)
 		if err != nil {
 			return nil, fmt.Errorf("uploading drive file: %w", err)
 		}
@@ -233,14 +233,14 @@ func (u *Uploader) Upload(ctx context.Context, progress func(int64)) (*youtube.V
 	}
 }
 
-func (u *Uploader) uploadFile(progress func(int64)) (*youtube.Video, error) {
-	file, err := os.Open(u.ContentFile)
+func (s *Service) uploadFile(progress func(int64)) (*youtube.Video, error) {
+	file, err := os.Open(s.ContentFile)
 	if err != nil {
 		return nil, fmt.Errorf("opening file: %w", err)
 	}
 	defer file.Close()
 
-	done, video, start, err := u.resume()
+	done, video, start, err := s.resume()
 	if err != nil {
 		return nil, fmt.Errorf("getting uploaded bytes: %w", err)
 	}
@@ -249,12 +249,12 @@ func (u *Uploader) uploadFile(progress func(int64)) (*youtube.Video, error) {
 		return video, nil
 	}
 
-	for start < u.ContentLength {
+	for start < s.ContentLength {
 		progress(start)
 
-		end := start + u.ChunkSize - 1
-		if end >= u.ContentLength {
-			end = u.ContentLength - 1
+		end := start + s.ChunkSize - 1
+		if end >= s.ContentLength {
+			end = s.ContentLength - 1
 		}
 
 		chunk := make([]byte, end-start+1)
@@ -263,13 +263,13 @@ func (u *Uploader) uploadFile(progress func(int64)) (*youtube.Video, error) {
 			return nil, fmt.Errorf("reading chunk: %w", err)
 		}
 
-		req, err := http.NewRequest("PUT", u.UploadURL, bytes.NewReader(chunk))
+		req, err := http.NewRequest("PUT", s.UploadURL, bytes.NewReader(chunk))
 		if err != nil {
 			return nil, fmt.Errorf("creating new chunk upload request: %w", err)
 		}
 
-		req.Header.Set("Authorization", "Bearer "+u.AccessToken)
-		req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, u.ContentLength))
+		req.Header.Set("Authorization", "Bearer "+s.AccessToken)
+		req.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, s.ContentLength))
 
 		client := &http.Client{}
 		resp, err := client.Do(req)
@@ -281,7 +281,7 @@ func (u *Uploader) uploadFile(progress func(int64)) (*youtube.Video, error) {
 		switch getStatus(resp.StatusCode) {
 		case StatusDone:
 			// remove file
-			if err := os.Remove(u.StateFile); err != nil {
+			if err := os.Remove(s.StateFile); err != nil {
 				return nil, fmt.Errorf("removing state file: %w", err)
 			}
 			// read response body for video information
@@ -295,7 +295,7 @@ func (u *Uploader) uploadFile(progress func(int64)) (*youtube.Video, error) {
 			continue // Skip to the next chunk
 		default: // StatusFailed
 			// upload permanently failed, remove state file (and ignore error)
-			_ = os.Remove(u.StateFile)
+			_ = os.Remove(s.StateFile)
 			// read response body for error message
 			errorMessage, _ := io.ReadAll(resp.Body)
 			return nil, fmt.Errorf("uploading chunk failed, status %d: %s", resp.StatusCode, errorMessage)
@@ -304,15 +304,15 @@ func (u *Uploader) uploadFile(progress func(int64)) (*youtube.Video, error) {
 	return nil, fmt.Errorf("finished without getting a success response")
 }
 
-func (u *Uploader) uploadFromDrive(ctx context.Context, progress func(int64)) (*youtube.Video, error) {
-	done, video, start, err := u.resume()
+func (s *Service) uploadFromDrive(ctx context.Context, progress func(int64)) (*youtube.Video, error) {
+	done, video, start, err := s.resume()
 	if err != nil {
 		return nil, fmt.Errorf("getting uploaded bytes: %w", err)
 	}
 	if done {
 		return video, nil
 	}
-	downloadRequest := u.DriveService.Files.Get(u.ContentFile).Context(ctx)
+	downloadRequest := s.DriveService.Files.Get(s.ContentFile).Context(ctx)
 	downloadRequest.Header().Set("Range", fmt.Sprintf("bytes=%d-", start))
 	download, err := downloadRequest.Download()
 	if err != nil {
@@ -326,20 +326,20 @@ func (u *Uploader) uploadFromDrive(ctx context.Context, progress func(int64)) (*
 		progress(start)
 
 		var last bool
-		bytesToRead := u.ChunkSize
-		if start+u.ChunkSize > u.ContentLength {
+		bytesToRead := s.ChunkSize
+		if start+s.ChunkSize > s.ContentLength {
 			last = true
-			bytesToRead = u.ContentLength - start
+			bytesToRead = s.ContentLength - start
 		}
 
-		uploadReq, err := http.NewRequest("PUT", u.UploadURL, NewChunkReader(download.Body, u.ChunkSize))
+		uploadReq, err := http.NewRequest("PUT", s.UploadURL, NewChunkReader(download.Body, s.ChunkSize))
 		if err != nil {
 			return nil, fmt.Errorf("creating upload request: %w", err)
 		}
 
 		end := start + bytesToRead - 1
-		uploadReq.Header.Set("Authorization", "Bearer "+u.AccessToken)
-		uploadReq.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, u.ContentLength))
+		uploadReq.Header.Set("Authorization", "Bearer "+s.AccessToken)
+		uploadReq.Header.Set("Content-Range", fmt.Sprintf("bytes %d-%d/%d", start, end, s.ContentLength))
 
 		resp, err := client.Do(uploadReq)
 		if err != nil {
@@ -350,7 +350,7 @@ func (u *Uploader) uploadFromDrive(ctx context.Context, progress func(int64)) (*
 		switch getStatus(resp.StatusCode) {
 		case StatusDone:
 			// upload complete - remove state
-			if err := os.Remove(u.StateFile); err != nil {
+			if err := os.Remove(s.StateFile); err != nil {
 				return nil, fmt.Errorf("removing state file: %w", err)
 			}
 			// read response body for video information
@@ -362,7 +362,7 @@ func (u *Uploader) uploadFromDrive(ctx context.Context, progress func(int64)) (*
 		case StatusResume:
 			if last {
 				// upload complete - remove state
-				if err := os.Remove(u.StateFile); err != nil {
+				if err := os.Remove(s.StateFile); err != nil {
 					return nil, fmt.Errorf("removing state file: %w", err)
 				}
 				// read response body for video information
@@ -376,7 +376,7 @@ func (u *Uploader) uploadFromDrive(ctx context.Context, progress func(int64)) (*
 			continue
 		case StatusFailed:
 			// upload permanently failed, remove state file (and ignore error)
-			_ = os.Remove(u.StateFile)
+			_ = os.Remove(s.StateFile)
 			// read response body for error message
 			errorMessage, _ := io.ReadAll(resp.Body)
 			return nil, fmt.Errorf("uploading chunk failed, status %d: %s", resp.StatusCode, errorMessage)
