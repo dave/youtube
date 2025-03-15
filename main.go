@@ -4,7 +4,7 @@ import (
 	"context"
 	"log"
 
-	"github.com/dave/youtube2/upload"
+	"github.com/dave/youtube/upload"
 )
 
 func main() {

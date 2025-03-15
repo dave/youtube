@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/dave/youtube2/resume"
+	"github.com/dave/youtube/resume"
 )
 
 func (s *Service) ResumePartialUpload(ctx context.Context) error {

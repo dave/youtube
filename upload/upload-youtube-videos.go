@@ -9,7 +9,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/dave/youtube2/resume"
+	"github.com/dave/youtube/resume"
 	"google.golang.org/api/youtube/v3"
 )
 
