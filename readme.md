@@ -46,3 +46,6 @@ Create here: https://console.cloud.google.com/auth/clients?inv=1&invt=AbqgZQ&pro
 
 Refresh token `youtube-oauth2-refresh-token.json` is created automatically by the oauth login script the first time it runs.
 
+# Google service account
+
+Share sheet and drive folder with: youtubescript@wildernessprime.iam.gserviceaccount.com
