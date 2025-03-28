@@ -37,7 +37,8 @@ func (s *Service) UpdateThumbnails() error {
 			if !item.Ready {
 				continue
 			}
-			if item.YoutubeVideo == nil {
+			if item.YoutubeVideo == nil && !s.Global.Preview {
+				// if we're not in preview mode, we can only update the thumbnail if the video has been uploaded
 				continue
 			}
 			if err := updateThumbnail(s, item); err != nil {
@@ -83,12 +84,14 @@ func updateThumbnail(s *Service, item *Item) error {
 			Name:    fmt.Sprintf("[%v]", item.String()),
 			Parents: []string{s.Global.PreviewThumbnailsFolder},
 		}
-
 		if _, err := s.DriveService.Files.Create(fileMetadata).Media(bytes.NewReader(transformedBytes)).Do(); err != nil {
 			return fmt.Errorf("creating file (%v): %w", item.String(), err)
 		}
 	}
 	if s.Global.Production {
+		if item.YoutubeVideo == nil {
+			return fmt.Errorf("item has no youtube video (%v)", item.String())
+		}
 		if _, err := s.YoutubeService.Thumbnails.Set(item.YoutubeVideo.Id).Media(bytes.NewReader(transformedBytes)).Do(); err != nil {
 			return fmt.Errorf("setting thumbnail (%v): %w", item.String(), err)
 		}
