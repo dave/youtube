@@ -12,33 +12,12 @@ import (
 
 var Funcs = template.FuncMap{
 
-	//"empty": func(v any) bool {
-	//	if v == nil {
-	//		return true
-	//	}
-	//	switch v := v.(type) {
-	//	case string:
-	//		return v == ""
-	//	}
-	//	return false
-	//},
-
 	"title": func(s string) string {
 		// Strings ending with 's (e.g. Tillman's pass) needs special case: 'S -> 's
 		return strings.Replace(strings.Title(strings.ToLower(s)), "'S", "'s", -1)
 	},
 	"upper": func(s string) string { return strings.ToUpper(s) },
 	"lower": func(s string) string { return strings.ToLower(s) },
-	//"int": func(a any) int {
-	//	switch v := a.(type) {
-	//	case float64:
-	//		return int(v)
-	//	case int:
-	//		return v
-	//	default:
-	//		return 0
-	//	}
-	//},
 
 	"commas": func(v int) string {
 		sign := ""
