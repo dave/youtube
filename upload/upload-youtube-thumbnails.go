@@ -64,12 +64,17 @@ func updateThumbnail(s *Service, item *Item) error {
 	if err != nil {
 		return fmt.Errorf("downloading drive file (%v): %w", item.String(), err)
 	}
-	f, err := transformImage(download.Body, textTopBuffer.String(), textBottomBuffer.String())
+	transformed, err := transformImage(download.Body, textTopBuffer.String(), textBottomBuffer.String())
 	if err != nil {
 		_ = download.Body.Close()
 		return fmt.Errorf("transforming thumbnail (%v): %w", item.String(), err)
 	}
 	_ = download.Body.Close()
+
+	transformedBytes, err := io.ReadAll(transformed)
+	if err != nil {
+		return fmt.Errorf("reading thumbnail (%v): %w", item.String(), err)
+	}
 
 	if s.Global.Preview {
 		s.StoreVideoPreview(item, "thumbnail_top", "", textTopBuffer.String())
@@ -78,12 +83,13 @@ func updateThumbnail(s *Service, item *Item) error {
 			Name:    fmt.Sprintf("[%v]", item.String()),
 			Parents: []string{s.Global.PreviewThumbnailsFolder},
 		}
-		if _, err := s.DriveService.Files.Create(fileMetadata).Media(f).Do(); err != nil {
+
+		if _, err := s.DriveService.Files.Create(fileMetadata).Media(bytes.NewReader(transformedBytes)).Do(); err != nil {
 			return fmt.Errorf("creating file (%v): %w", item.String(), err)
 		}
 	}
 	if s.Global.Production {
-		if _, err := s.YoutubeService.Thumbnails.Set(item.YoutubeVideo.Id).Media(f).Do(); err != nil {
+		if _, err := s.YoutubeService.Thumbnails.Set(item.YoutubeVideo.Id).Media(bytes.NewReader(transformedBytes)).Do(); err != nil {
 			return fmt.Errorf("setting thumbnail (%v): %w", item.String(), err)
 		}
 	}

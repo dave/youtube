@@ -194,7 +194,7 @@ func (s *Service) updateVideo(item *Item) error {
 	}
 	if s.Global.Production {
 		if changes.Changed {
-			fmt.Printf("Updating video %s\n", item)
+			fmt.Printf("Updating video (%v)\n", item.String())
 			// clear FileDetails because it's not updatable
 			item.YoutubeVideo.FileDetails = nil
 			parts := []string{"snippet", "localizations", "status"}
@@ -230,7 +230,7 @@ func (s *Service) createVideo(ctx context.Context, item *Item) error {
 		s.StoreVideoPreview(item, "video_publish_at", "", changes.PublishAt.After)
 	}
 	if s.Global.Production {
-		fmt.Printf("Uploading video %s\n", item)
+		fmt.Printf("Uploading video (%s)\n", item.String())
 		progress := func(start int64) {
 			fmt.Printf(" - uploaded %d of %d bytes (%.2f%%)\n", start, res.ContentLength, float64(start)/float64(res.ContentLength)*100)
 		}
