@@ -167,11 +167,11 @@ func (s *Service) CreateOrUpdateVideos(ctx context.Context) error {
 			if item.YoutubeVideo == nil {
 				// video doesn't exist yet, create it
 				if err := s.createVideo(ctx, item); err != nil {
-					return fmt.Errorf("updating video: %w", err)
+					return fmt.Errorf("updating video (%v): %w", item.String(), err)
 				}
 			} else {
 				if err := s.updateVideo(item); err != nil {
-					return fmt.Errorf("updating video: %w", err)
+					return fmt.Errorf("updating video (%v): %w", item.String(), err)
 				}
 			}
 		}
@@ -182,7 +182,7 @@ func (s *Service) CreateOrUpdateVideos(ctx context.Context) error {
 func (s *Service) updateVideo(item *Item) error {
 	changes, err := Apply(item, item.YoutubeVideo)
 	if err != nil {
-		return fmt.Errorf("applying data: %w", err)
+		return fmt.Errorf("applying data (%v): %w", item.String(), err)
 	}
 
 	if s.Global.Preview {
@@ -199,7 +199,7 @@ func (s *Service) updateVideo(item *Item) error {
 			item.YoutubeVideo.FileDetails = nil
 			parts := []string{"snippet", "localizations", "status"}
 			if _, err := s.YoutubeService.Videos.Update(parts, item.YoutubeVideo).Do(); err != nil {
-				return fmt.Errorf("updating video: %w", err)
+				return fmt.Errorf("updating video (%v): %w", item.String(), err)
 			}
 		}
 	}
@@ -211,7 +211,7 @@ func (s *Service) createVideo(ctx context.Context, item *Item) error {
 
 	res, err := s.getResume()
 	if err != nil {
-		return fmt.Errorf("getting uploader: %w", err)
+		return fmt.Errorf("getting uploader (%v): %w", item.String(), err)
 	}
 	if res.State == resume.StateUploadInProgress {
 		return fmt.Errorf("upload already in progress")
@@ -220,7 +220,7 @@ func (s *Service) createVideo(ctx context.Context, item *Item) error {
 
 	changes, err := Apply(item, video)
 	if err != nil {
-		return fmt.Errorf("applying data: %w", err)
+		return fmt.Errorf("applying data (%v): %w", item.String(), err)
 	}
 
 	if s.Global.Preview {
@@ -235,11 +235,11 @@ func (s *Service) createVideo(ctx context.Context, item *Item) error {
 			fmt.Printf(" - uploaded %d of %d bytes (%.2f%%)\n", start, res.ContentLength, float64(start)/float64(res.ContentLength)*100)
 		}
 		if err := res.Initialise(item.VideoFile.Id, video); err != nil {
-			return fmt.Errorf("initialising upload: %w", err)
+			return fmt.Errorf("initialising upload (%v): %w", item.String(), err)
 		}
 		insertedVideo, err := res.Upload(ctx, progress)
 		if err != nil {
-			return fmt.Errorf("uploading video: %w", err)
+			return fmt.Errorf("uploading video (%v): %w", item.String(), err)
 		}
 
 		item.YoutubeVideo = insertedVideo
@@ -258,17 +258,17 @@ func apply(item *Item) (YoutubeFields, error) {
 
 	bufDescription := &strings.Builder{}
 	if err := item.Expedition.Templates.ExecuteTemplate(bufDescription, item.Template, item); err != nil {
-		return YoutubeFields{}, fmt.Errorf("error executing description template: %w", err)
+		return YoutubeFields{}, fmt.Errorf("error executing description template (%v): %w", item.String(), err)
 	}
 	metadata, err := item.Metadata()
 	if err != nil {
-		return YoutubeFields{}, fmt.Errorf("error getting metadata: %w", err)
+		return YoutubeFields{}, fmt.Errorf("error getting metadata (%v): %w", item.String(), err)
 	}
 	fields.Description = strings.TrimSpace(bufDescription.String()) + "\n\n{" + metadata + "}"
 
 	bufTitle := &strings.Builder{}
 	if err := item.Expedition.Templates.ExecuteTemplate(bufTitle, "title", item); err != nil {
-		return YoutubeFields{}, fmt.Errorf("error executing title template: %w", err)
+		return YoutubeFields{}, fmt.Errorf("error executing title template (%v): %w", item.String(), err)
 	}
 	fields.Title = bufTitle.String()
 
@@ -278,7 +278,7 @@ func apply(item *Item) (YoutubeFields, error) {
 func Apply(item *Item, video *youtube.Video) (changes Changes, err error) {
 	fields, err := apply(item)
 	if err != nil {
-		return Changes{}, fmt.Errorf("applying data: %w", err)
+		return Changes{}, fmt.Errorf("applying data (%v): %w", item.String(), err)
 	}
 	return fields.Apply(video), nil
 }

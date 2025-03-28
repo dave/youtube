@@ -12,16 +12,16 @@ import (
 
 var Funcs = template.FuncMap{
 
-	"empty": func(v any) bool {
-		if v == nil {
-			return true
-		}
-		switch v := v.(type) {
-		case string:
-			return v == ""
-		}
-		return false
-	},
+	//"empty": func(v any) bool {
+	//	if v == nil {
+	//		return true
+	//	}
+	//	switch v := v.(type) {
+	//	case string:
+	//		return v == ""
+	//	}
+	//	return false
+	//},
 
 	"title": func(s string) string {
 		// Strings ending with 's (e.g. Tillman's pass) needs special case: 'S -> 's
@@ -29,16 +29,16 @@ var Funcs = template.FuncMap{
 	},
 	"upper": func(s string) string { return strings.ToUpper(s) },
 	"lower": func(s string) string { return strings.ToLower(s) },
-	"int": func(a any) int {
-		switch v := a.(type) {
-		case float64:
-			return int(v)
-		case int:
-			return v
-		default:
-			return 0
-		}
-	},
+	//"int": func(a any) int {
+	//	switch v := a.(type) {
+	//	case float64:
+	//		return int(v)
+	//	case int:
+	//		return v
+	//	default:
+	//		return 0
+	//	}
+	//},
 
 	"commas": func(v int) string {
 		sign := ""
@@ -75,12 +75,7 @@ var Funcs = template.FuncMap{
 	"sub": func(a, b int) int { return a - b },
 
 	// date formats a date as "May 20th"
-	"date": func(date float64) string {
-		// Google Sheets base date is December 30, 1899
-		baseDate := time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC)
-		// Add the number of days (including fractional days) to the base date
-		t := baseDate.Add(time.Duration(date * 24 * float64(time.Hour)))
-
+	"date": func(t time.Time) string {
 		day := t.Day()
 		suffix := "th"
 		switch day % 10 {

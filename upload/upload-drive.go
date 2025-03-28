@@ -65,11 +65,11 @@ func (s *Service) FindDriveFiles() error {
 				var err error
 				videoFiles, err = getFilesInFolder(s.DriveService, expedition.VideosFolder)
 				if err != nil {
-					return fmt.Errorf("get video files: %w", err)
+					return fmt.Errorf("get video files (%v): %w", item.String(), err)
 				}
 				thumbnailFiles, err = getFilesInFolder(s.DriveService, expedition.ThumbnailsFolder)
 				if err != nil {
-					return fmt.Errorf("get video files: %w", err)
+					return fmt.Errorf("get video files (%v): %w", item.String(), err)
 				}
 				gotFiles = true
 			}
@@ -77,11 +77,11 @@ func (s *Service) FindDriveFiles() error {
 			if needVideo {
 				videoFilenameRegexBuffer := bytes.NewBufferString("")
 				if err := item.Expedition.Templates.ExecuteTemplate(videoFilenameRegexBuffer, "video_filename", item); err != nil {
-					return fmt.Errorf("execute video filename regex template: %w", err)
+					return fmt.Errorf("execute video filename regex template (%v): %w", item.String(), err)
 				}
 				videoFilenameRegex, err := regexp.Compile(videoFilenameRegexBuffer.String())
 				if err != nil {
-					return fmt.Errorf("compile video filename regex: %w", err)
+					return fmt.Errorf("compile video filename regex (%v): %w", item.String(), err)
 				}
 				for filename := range videoFiles {
 					if videoFilenameRegex.MatchString(filename) {
@@ -90,18 +90,18 @@ func (s *Service) FindDriveFiles() error {
 					}
 				}
 				if item.VideoFile == nil {
-					return fmt.Errorf("no video file found for item %s", item)
+					return fmt.Errorf("no video file found (%v)", item.String())
 				}
 			}
 
 			if needThumbnail {
 				thumbnailFilenameRegexBuffer := bytes.NewBufferString("")
 				if err := item.Expedition.Templates.ExecuteTemplate(thumbnailFilenameRegexBuffer, "thumbnail_filename", item); err != nil {
-					return fmt.Errorf("execute thumbnail filename regex template: %w", err)
+					return fmt.Errorf("execute thumbnail filename regex template (%v): %w", item.String(), err)
 				}
 				thumbnailFilenameRegex, err := regexp.Compile(thumbnailFilenameRegexBuffer.String())
 				if err != nil {
-					return fmt.Errorf("compile thumbnail filename regex: %w", err)
+					return fmt.Errorf("compile thumbnail filename regex (%v): %w", item.String(), err)
 				}
 				for filename := range thumbnailFiles {
 					if thumbnailFilenameRegex.MatchString(filename) {
@@ -110,7 +110,7 @@ func (s *Service) FindDriveFiles() error {
 					}
 				}
 				if item.ThumbnailFile == nil {
-					return fmt.Errorf("no thumbnail file found for item %s", item)
+					return fmt.Errorf("no thumbnail file found (%v)", item.String())
 				}
 			}
 		}

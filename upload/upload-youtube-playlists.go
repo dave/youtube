@@ -87,10 +87,10 @@ func (s *Service) ParsePlaylistsMetaData() error {
 			metaBase64 := matches[1]
 			metaJson, err := base64.StdEncoding.DecodeString(metaBase64)
 			if err != nil {
-				return fmt.Errorf("decoding playlist meta data for %s: %w", playlist.Id, err)
+				return fmt.Errorf("decoding playlist meta data (%v): %w", playlist.Id, err)
 			}
 			if err := json.Unmarshal(metaJson, &meta); err != nil {
-				return fmt.Errorf("unmarshaling playlist meta data for %s: %w", playlist.Id, err)
+				return fmt.Errorf("unmarshaling playlist meta data (%v): %w", playlist.Id, err)
 			}
 		}
 
@@ -130,17 +130,17 @@ func (s *Service) CreateOrUpdatePlaylists() error {
 			if expedition.Playlist == nil {
 				// create playlist
 				if err := s.createPlaylist(expedition); err != nil {
-					return fmt.Errorf("creating expedition playlist: %w", err)
+					return fmt.Errorf("creating expedition playlist (%v): %w", expedition.Ref, err)
 				}
 			} else {
 				if err := s.updatePlaylist(expedition); err != nil {
-					return fmt.Errorf("updating expedition playlist: %w", err)
+					return fmt.Errorf("updating expedition playlist (%v): %w", expedition.Ref, err)
 				}
 			}
 		} else {
 			if expedition.Playlist != nil {
 				if err := s.deletePlaylist(expedition); err != nil {
-					return fmt.Errorf("deleting expedition playlist: %w", err)
+					return fmt.Errorf("deleting expedition playlist (%v): %w", expedition.Ref, err)
 				}
 			}
 		}
@@ -148,11 +148,11 @@ func (s *Service) CreateOrUpdatePlaylists() error {
 			for _, section := range expedition.Sections {
 				if section.Playlist == nil {
 					if err := s.createPlaylist(section); err != nil {
-						return fmt.Errorf("creating section playlist: %w", err)
+						return fmt.Errorf("creating section playlist (%v, %v): %w", expedition.Ref, section.Ref, err)
 					}
 				} else {
 					if err := s.updatePlaylist(section); err != nil {
-						return fmt.Errorf("updating section playlist: %w", err)
+						return fmt.Errorf("updating section playlist (%v, %v): %w", expedition.Ref, section.Ref, err)
 					}
 				}
 			}
@@ -160,7 +160,7 @@ func (s *Service) CreateOrUpdatePlaylists() error {
 			for _, section := range expedition.Sections {
 				if section.Playlist != nil {
 					if err := s.deletePlaylist(section); err != nil {
-						return fmt.Errorf("deleting section playlist: %w", err)
+						return fmt.Errorf("deleting section playlist (%v, %v): %w", expedition.Ref, section.Ref, err)
 					}
 				}
 			}
@@ -181,16 +181,16 @@ func (s *Service) getPlaylistDetails(parent HasPlaylist) (title, description str
 
 	titleBuffer := bytes.NewBufferString("")
 	if err := expedition.Templates.ExecuteTemplate(titleBuffer, "playlist_title", templateData); err != nil {
-		return "", "", nil, fmt.Errorf("execute playlists_title template: %w", err)
+		return "", "", nil, fmt.Errorf("execute playlists_title template (%v): %w", parent.String(), err)
 	}
 	title = titleBuffer.String()
 	descBuffer := bytes.NewBufferString("")
 	if err := expedition.Templates.ExecuteTemplate(descBuffer, "playlist_description", templateData); err != nil {
-		return "", "", nil, fmt.Errorf("execute playlists_desc template: %w", err)
+		return "", "", nil, fmt.Errorf("execute playlists_desc template (%v): %w", parent.String(), err)
 	}
 	metadata, err := parent.GetMetadata()
 	if err != nil {
-		return "", "", nil, fmt.Errorf("error getting playlist metadata: %w", err)
+		return "", "", nil, fmt.Errorf("error getting playlist metadata (%v): %w", parent.String(), err)
 	}
 	description = strings.TrimSpace(descBuffer.String()) + "\n\n{" + metadata + "}"
 
@@ -214,7 +214,7 @@ func (s *Service) updatePlaylist(parent HasPlaylist) error {
 	playlist := parent.GetPlaylist()
 	title, description, content, err := s.getPlaylistDetails(parent)
 	if err != nil {
-		return fmt.Errorf("getting playlist details: %w", err)
+		return fmt.Errorf("getting playlist details (%v): %w", parent.String(), err)
 	}
 
 	if s.Global.Preview {
@@ -229,14 +229,14 @@ func (s *Service) updatePlaylist(parent HasPlaylist) error {
 			playlist.Snippet.DefaultLanguage = "en"
 			parts := []string{"snippet", "localizations", "status"}
 			if _, err := s.YoutubeService.Playlists.Update(parts, playlist).Do(); err != nil {
-				return fmt.Errorf("updating playlist: %w", err)
+				return fmt.Errorf("updating playlist (%v): %w", parent.String(), err)
 			}
 		}
 	}
 
 	playlistItems, err := s.listPlaylistsItems(parent.GetPlaylistId())
 	if err != nil {
-		return fmt.Errorf("listing playlist items: %w", err)
+		return fmt.Errorf("listing playlist items (%v): %w", parent.String(), err)
 	}
 	var changed bool
 	if len(playlistItems) != len(content) {
@@ -252,7 +252,7 @@ func (s *Service) updatePlaylist(parent HasPlaylist) error {
 	if changed {
 		// sync the youtube playlist
 		if err := s.syncPlaylist(parent, content, playlistItems); err != nil {
-			return fmt.Errorf("syncing playlist: %w", err)
+			return fmt.Errorf("syncing playlist (%v): %w", parent.String(), err)
 		}
 	} else {
 		if s.Global.Preview {
@@ -390,12 +390,12 @@ func (s *Service) syncPlaylist(parent HasPlaylist, input []*Item, output []*yout
 					},
 				}).Do()
 				if err != nil {
-					return fmt.Errorf("failed to insert playlist item %s: %v", v.YoutubeId, err)
+					return fmt.Errorf("failed to insert playlist (%v) item %s: %w", parent.String(), v.YoutubeId, err)
 				}
 				// Position is ignored when inserting, must do an update fix.
 				pli.Snippet.Position = int64(outputIndex)
 				if _, err := s.YoutubeService.PlaylistItems.Update([]string{"snippet"}, pli).Do(); err != nil {
-					return fmt.Errorf("failed to update playlist item %s: %w", pli.Id, err)
+					return fmt.Errorf("failed to update playlist (%v) item %s: %w", parent.String(), pli.Id, err)
 				}
 			}
 			outputIndex++ // Advance since we inserted
@@ -411,7 +411,7 @@ func (s *Service) syncPlaylist(parent HasPlaylist, input []*Item, output []*yout
 func (s *Service) createPlaylist(parent HasPlaylist) error {
 	title, description, content, err := s.getPlaylistDetails(parent)
 	if err != nil {
-		return fmt.Errorf("getting playlist details: %w", err)
+		return fmt.Errorf("getting playlist details (%v): %w", parent.String(), err)
 	}
 
 	if s.Global.Preview {
@@ -441,7 +441,7 @@ func (s *Service) createPlaylist(parent HasPlaylist) error {
 		)
 		newPlaylist, err := call.Do()
 		if err != nil {
-			return fmt.Errorf("creating playlist: %w", err)
+			return fmt.Errorf("creating playlist (%v): %w", parent.String(), err)
 		}
 		switch parent := parent.(type) {
 		case *Expedition:
@@ -465,7 +465,7 @@ func (s *Service) createPlaylist(parent HasPlaylist) error {
 			}
 			fmt.Println("Creating playlist item for", item.YoutubeId)
 			if _, err := s.YoutubeService.PlaylistItems.Insert([]string{"snippet"}, playlistItem).Do(); err != nil {
-				return fmt.Errorf("inserting playlist item: %w", err)
+				return fmt.Errorf("inserting playlist item (%v): %w", parent.String(), err)
 			}
 		}
 	}
@@ -480,7 +480,7 @@ func (s *Service) deletePlaylist(parent HasPlaylist) error {
 	if s.Global.Production {
 		fmt.Println("Deleting playlist", parent.GetPlaylistId())
 		if err := s.YoutubeService.Playlists.Delete(playlist.Id).Do(); err != nil {
-			return fmt.Errorf("deleting playlist: %w", err)
+			return fmt.Errorf("deleting playlist (%v): %w", parent.String(), err)
 		}
 	}
 	return nil
@@ -492,6 +492,7 @@ type HasPlaylist interface {
 	GetExpedition() *Expedition
 	GetItems() []*Item
 	GetMetadata() (string, error)
+	String() string
 }
 
 func (e *Expedition) GetPlaylistId() string {
@@ -517,6 +518,10 @@ func (e *Expedition) GetMetadata() (string, error) {
 	}
 	return base64.StdEncoding.EncodeToString(metaDataBytes), nil
 }
+func (e *Expedition) String() string {
+	return fmt.Sprintf("%v", e.Ref)
+}
+
 func (s *Section) GetPlaylistId() string {
 	return s.PlaylistId
 }
@@ -540,4 +545,7 @@ func (s *Section) GetMetadata() (string, error) {
 		return "", fmt.Errorf("encoding section playlist meta data json: %w", err)
 	}
 	return base64.StdEncoding.EncodeToString(metaDataBytes), nil
+}
+func (s *Section) String() string {
+	return fmt.Sprintf("%v, %v", s.Expedition.Ref, s.Ref)
 }

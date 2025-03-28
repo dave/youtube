@@ -41,7 +41,7 @@ func (s *Service) UpdateThumbnails() error {
 				continue
 			}
 			if err := updateThumbnail(s, item); err != nil {
-				return fmt.Errorf("updating thumbnail: %w", err)
+				return fmt.Errorf("updating thumbnail (%v): %w", item.String(), err)
 			}
 		}
 	}
@@ -52,22 +52,22 @@ func updateThumbnail(s *Service, item *Item) error {
 
 	textTopBuffer := bytes.NewBufferString("")
 	if err := item.Expedition.Templates.ExecuteTemplate(textTopBuffer, "thumbnail_top", item); err != nil {
-		return fmt.Errorf("execute thumbnail top template: %w", err)
+		return fmt.Errorf("execute thumbnail top template (%v): %w", item.String(), err)
 	}
 	textBottomBuffer := bytes.NewBufferString("")
 	if err := item.Expedition.Templates.ExecuteTemplate(textBottomBuffer, "thumbnail_bottom", item); err != nil {
-		return fmt.Errorf("execute thumbnail top template: %w", err)
+		return fmt.Errorf("execute thumbnail top template (%v): %w", item.String(), err)
 	}
 
-	fmt.Println("Updating thumbnail", item.String())
+	fmt.Printf("Updating thumbnail (%v)\n", item.String())
 	download, err := s.DriveService.Files.Get(item.ThumbnailFile.Id).Download()
 	if err != nil {
-		return fmt.Errorf("downloading drive file: %w", err)
+		return fmt.Errorf("downloading drive file (%v): %w", item.String(), err)
 	}
 	f, err := transformImage(download.Body, textTopBuffer.String(), textBottomBuffer.String())
 	if err != nil {
 		_ = download.Body.Close()
-		return fmt.Errorf("transforming thumbnail: %w", err)
+		return fmt.Errorf("transforming thumbnail (%v): %w", item.String(), err)
 	}
 	_ = download.Body.Close()
 
@@ -75,30 +75,19 @@ func updateThumbnail(s *Service, item *Item) error {
 		s.StoreVideoPreview(item, "thumbnail_top", "", textTopBuffer.String())
 		s.StoreVideoPreview(item, "thumbnail_bottom", "", textBottomBuffer.String())
 		fileMetadata := &drive.File{
-			Name:    item.String(),
+			Name:    fmt.Sprintf("[%v]", item.String()),
 			Parents: []string{s.Global.PreviewThumbnailsFolder},
 		}
 		if _, err := s.DriveService.Files.Create(fileMetadata).Media(f).Do(); err != nil {
-			return fmt.Errorf("creating file: %w", err)
+			return fmt.Errorf("creating file (%v): %w", item.String(), err)
 		}
 	}
 	if s.Global.Production {
 		if _, err := s.YoutubeService.Thumbnails.Set(item.YoutubeVideo.Id).Media(f).Do(); err != nil {
-			return fmt.Errorf("setting thumbnail: %w", err)
+			return fmt.Errorf("setting thumbnail (%v): %w", item.String(), err)
 		}
 	}
 	return nil
-
-	// write to file for debugging
-	//thumbnailFile, err := os.Create("thumbnail.jpg")
-	//if err != nil {
-	//	return fmt.Errorf("creating thumbnail file: %w", err)
-	//}
-	//_, err = io.Copy(thumbnailFile, f)
-	//if err != nil {
-	//	return fmt.Errorf("writing thumbnail file: %w", err)
-	//}
-	//return fmt.Errorf("stopping here")
 
 }
 

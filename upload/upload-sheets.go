@@ -59,7 +59,7 @@ func (s *Service) GetAllSheetsData() error {
 			continue
 		}
 		if err := s.GetSheetData(sheetData.Properties.Title); err != nil {
-			return fmt.Errorf("unable to get sheet data: %w", err)
+			return fmt.Errorf("unable to get sheet data (%v): %w", sheetData.Properties.Title, err)
 		}
 	}
 	return nil
@@ -68,7 +68,7 @@ func (s *Service) GetAllSheetsData() error {
 func (s *Service) GetSheetData(titles ...string) error {
 	for _, title := range titles {
 		sheet := &Sheet{
-			DataByRef: map[string]map[string]interface{}{},
+			DataByRef: map[string]map[string]Cell{},
 		}
 		s.Sheets[title] = sheet
 
@@ -89,7 +89,7 @@ func (s *Service) GetSheetData(titles ...string) error {
 			ValueRenderOption("UNFORMATTED_VALUE").
 			Do()
 		if err != nil {
-			return fmt.Errorf("unable to retrieve values from sheet: %w", err)
+			return fmt.Errorf("unable to retrieve values from sheet (%v): %w", title, err)
 		}
 		hasRef := false
 		refColumn := 0
@@ -104,14 +104,20 @@ func (s *Service) GetSheetData(titles ...string) error {
 				}
 				continue
 			}
-			rowData := map[string]any{}
+			rowData := map[string]Cell{}
 			ref := ""
-			rowData["row_id"] = i + 1
+			rowData["row_id"] = Cell{i + 1}
+			for _, header := range sheet.Headers {
+				rowData[header] = Cell{nil}
+			}
 			for columnIndex, cellValue := range row {
 				if hasRef && columnIndex == refColumn {
 					ref = cellValue.(string)
 				}
-				rowData[sheet.Headers[columnIndex]] = cellValue
+				if columnIndex >= len(sheet.Headers) {
+					continue
+				}
+				rowData[sheet.Headers[columnIndex]] = Cell{cellValue}
 			}
 			sheet.Data = append(sheet.Data, rowData)
 			if hasRef {
@@ -124,9 +130,9 @@ func (s *Service) GetSheetData(titles ...string) error {
 
 func (s *Service) ParseGlobal() error {
 	s.Global = &Global{
-		Preview:                 s.Sheets["global"].DataByRef["preview"]["value"].(bool),
-		Production:              s.Sheets["global"].DataByRef["production"]["value"].(bool),
-		PreviewThumbnailsFolder: s.Sheets["global"].DataByRef["preview_thumbnails_folder"]["value"].(string),
+		Preview:                 s.Sheets["global"].DataByRef["preview"]["value"].Bool(),
+		Production:              s.Sheets["global"].DataByRef["production"]["value"].Bool(),
+		PreviewThumbnailsFolder: s.Sheets["global"].DataByRef["preview_thumbnails_folder"]["value"].String(),
 	}
 
 	return nil
@@ -262,18 +268,18 @@ func (s *Service) WritePlaylistsPreview() error {
 
 func (s *Service) ParseExpeditions() error {
 	for _, data := range s.Sheets["expedition"].Data {
-		ref := data["ref"].(string)
+		ref := data["ref"].String()
 		s.Expeditions[ref] = &Expedition{
-			RowId:              data["row_id"].(int),
+			RowId:              data["row_id"].Int(),
 			Ref:                ref,
-			Name:               data["name"].(string),
-			Ready:              data["ready"].(bool),
-			Process:            data["process"].(bool),
-			Thumbnails:         data["thumbnails"].(bool),
-			VideosFolder:       stringify(data["videos_folder"]),
-			ThumbnailsFolder:   stringify(data["thumbnails_folder"]),
-			ExpeditionPlaylist: data["expedition_playlist"].(bool),
-			SectionPlaylists:   data["section_playlists"].(bool),
+			Name:               data["name"].String(),
+			Ready:              data["ready"].Bool(),
+			Process:            data["process"].Bool(),
+			Thumbnails:         data["thumbnails"].Bool(),
+			VideosFolder:       data["videos_folder"].String(),
+			ThumbnailsFolder:   data["thumbnails_folder"].String(),
+			ExpeditionPlaylist: data["expedition_playlist"].Bool(),
+			SectionPlaylists:   data["section_playlists"].Bool(),
 			Data:               data,
 			SectionsByRef:      map[string]*Section{},
 			Templates:          template.New("").Funcs(Funcs),
@@ -293,11 +299,11 @@ func (s *Service) ParseSections() error {
 		}
 
 		for _, data := range sheet.Data {
-			ref := data["ref"].(string)
+			ref := data["ref"].String()
 			expedition.SectionsByRef[ref] = &Section{
-				RowId:      data["row_id"].(int),
+				RowId:      data["row_id"].Int(),
 				Ref:        ref,
-				Name:       stringify(data["name"]),
+				Name:       data["name"].String(),
 				Data:       data,
 				Expedition: expedition,
 			}
@@ -320,14 +326,14 @@ func (s *Service) ParseItems() error {
 		for _, data := range sheet.Data {
 
 			parseLocation := func(s string) Location {
-				if empty(data[s+"_name"]) {
+				if data[s+"_name"].Empty() {
 					return Location{}
 				}
 				elevation, ok := data[s+"_elevation"]
 				if ok {
-					return Location{Name: data[s+"_name"].(string), Elevation: int(elevation.(float64))}
+					return Location{Name: data[s+"_name"].String(), Elevation: elevation.Int()}
 				} else {
-					return Location{Name: data[s+"_name"].(string)}
+					return Location{Name: data[s+"_name"].String()}
 				}
 			}
 			var via []Location
@@ -342,30 +348,30 @@ func (s *Service) ParseItems() error {
 			}
 			var section *Section
 			var sectionRef string
-			if data["section_ref"] != nil && data["section_ref"].(string) != "" {
-				sectionRef = data["section_ref"].(string)
+			if data["section_ref"].String() != "" {
+				sectionRef = data["section_ref"].String()
 				var ok bool
 				section, ok = expedition.SectionsByRef[sectionRef]
 				if !ok {
-					return fmt.Errorf("section not found: %s", sectionRef)
+					return fmt.Errorf("section not found (%v): %s", expedition.Ref, sectionRef)
 				}
 			}
 
 			var release time.Time
-			if !empty(data["release"]) {
-				release = floatToTime(data["release"].(float64))
+			if !data["release"].Empty() {
+				release = data["release"].Time()
 			}
 
 			item := &Item{
-				RowId:      data["row_id"].(int),
+				RowId:      data["row_id"].Int(),
 				Expedition: expedition,
-				Type:       stringify(data["type"]),
-				Key:        int(data["key"].(float64)),
-				Video:      data["video"].(bool),
-				Ready:      data["ready"].(bool),
+				Type:       data["type"].String(),
+				Key:        data["key"].Int(),
+				Video:      data["video"].Bool(),
+				Ready:      data["ready"].Bool(),
 				Release:    release,
 				Data:       data,
-				Template:   stringify(data["template"]),
+				Template:   data["template"].String(),
 				From:       parseLocation("from"),
 				To:         parseLocation("to"),
 				Via:        via,
@@ -391,24 +397,24 @@ func (s *Service) ParseTemplates() error {
 		}
 
 		for _, data := range sheet.Data {
-			if empty(data["template"]) {
+			if data["template"].Empty() {
 				continue
 			}
-			ref := data["ref"].(string)
-			_, err := expedition.Templates.New(ref).Parse(data["template"].(string))
+			ref := data["ref"].String()
+			_, err := expedition.Templates.New(ref).Parse(data["template"].String())
 			if err != nil {
-				return fmt.Errorf("error parsing template: %w", err)
+				return fmt.Errorf("error parsing template (%v): %w", ref, err)
 			}
 		}
 
 		for _, data := range s.Sheets["template"].Data {
-			if empty(data["template"]) {
+			if data["template"].Empty() {
 				continue
 			}
-			ref := data["ref"].(string)
-			_, err := expedition.Templates.New(ref).Parse(data["template"].(string))
+			ref := data["ref"].String()
+			_, err := expedition.Templates.New(ref).Parse(data["template"].String())
 			if err != nil {
-				return fmt.Errorf("error parsing template: %w", err)
+				return fmt.Errorf("error parsing template (%v): %w", ref, err)
 			}
 		}
 	}
@@ -432,15 +438,15 @@ func (s *Service) ParseLinkedData() error {
 				}
 
 				for i, data := range sheet.Data {
-					if empty(data[header]) {
+					if data[header].Empty() {
 						continue
 					}
-					ref := data[header].(string)
+					ref := data[header].String()
 					linkedData := linkedSheet.DataByRef[ref]
 					if linkedData == nil {
 						return fmt.Errorf("linked data not found: %s", ref)
 					}
-					sheet.Data[i][linkedSheetName] = linkedData
+					sheet.Data[i][linkedSheetName] = Cell{linkedData}
 				}
 			}
 
@@ -520,29 +526,4 @@ func (s *Service) StoreVideoPreview(item *Item, name, before, after string) {
 			textdiff.Unified("before", "after", before, after),
 		)
 	}
-}
-
-func floatToTime(f float64) time.Time {
-	// Google Sheets base date is December 30, 1899
-	baseDate := time.Date(1899, 12, 30, 0, 0, 0, 0, time.UTC)
-	// Add the number of days (including fractional days) to the base date
-	return baseDate.Add(time.Duration(f * 24 * float64(time.Hour)))
-}
-
-func empty(v any) bool {
-	if v == nil {
-		return true
-	}
-	switch v := v.(type) {
-	case string:
-		return v == ""
-	}
-	return false
-}
-
-func stringify(v any) string {
-	if v == nil {
-		return ""
-	}
-	return v.(string)
 }

@@ -154,21 +154,23 @@ func (s *Service) Start(ctx context.Context) error {
 		if err := s.CreateOrUpdatePlaylists(); err != nil {
 			return fmt.Errorf("updating playlists: %w", err)
 		}
-
-		if err := s.UpdateThumbnails(); err != nil {
-			return fmt.Errorf("updating thumbnails: %w", err)
-		}
 	}
 
 	// WRITE PREVIEW DATA TO SHEET
 	{
-
 		if err := s.WriteVideosPreview(); err != nil {
 			return fmt.Errorf("unable to write videos preview: %w", err)
 		}
 
 		if err := s.WritePlaylistsPreview(); err != nil {
 			return fmt.Errorf("unable to write playlists preview: %w", err)
+		}
+	}
+
+	// UPDATE THUMBNAILS
+	{
+		if err := s.UpdateThumbnails(); err != nil {
+			return fmt.Errorf("updating thumbnails: %w", err)
 		}
 	}
 
