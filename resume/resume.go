@@ -12,6 +12,8 @@ import (
 	"strconv"
 	"strings"
 
+	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox"
+	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox/files"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/youtube/v3"
 )
@@ -24,6 +26,7 @@ type Service struct {
 	ChunkSize     int64
 	StateFile     string
 	DriveService  *drive.Service
+	DropboxConfig *dropbox.Config
 	ContentFile   string
 	ContentLength int64
 }
@@ -65,6 +68,25 @@ func NewGoogleDrive(driveService *drive.Service, youtubeAccessToken string, chun
 	return u, nil
 }
 
+func NewDropbox(dropboxConfig *dropbox.Config, youtubeAccessToken string, chunkSize int64, stateFilePath string) (*Service, error) {
+
+	u := &Service{
+		Location:      LocationDropbox,
+		DropboxConfig: dropboxConfig,
+		AccessToken:   youtubeAccessToken,
+		ChunkSize:     chunkSize,
+		StateFile:     stateFilePath,
+	}
+
+	state, err := u.loadState()
+	if err != nil {
+		return nil, fmt.Errorf("loading state: %w", err)
+	}
+	u.State = state
+
+	return u, nil
+}
+
 func (s *Service) Initialise(contentFile string, data *youtube.Video) error {
 	if s.State == StateUploadInProgress {
 		return fmt.Errorf("upload already in progress")
@@ -88,6 +110,17 @@ func (s *Service) Initialise(contentFile string, data *youtube.Video) error {
 			return fmt.Errorf("getting size of content: %w", err)
 		}
 		s.ContentLength = sizeResponse.Size
+	case LocationDropbox:
+		dbx := files.New(*s.DropboxConfig)
+		metaRes, err := getDropboxFileMetadata(dbx, s.ContentFile)
+		if err != nil {
+			return fmt.Errorf("getting dropbox metadata: %w", err)
+		}
+		fileMeta, ok := metaRes.(*files.FileMetadata)
+		if !ok {
+			return fmt.Errorf("failed to get dropbox file metadata (%v)", s.ContentFile)
+		}
+		s.ContentLength = int64(fileMeta.Size)
 	}
 
 	dataBytes, err := json.Marshal(data)
@@ -224,10 +257,10 @@ func (s *Service) Upload(ctx context.Context, progress func(int64)) (*youtube.Vi
 			return nil, fmt.Errorf("uploading local file: %w", err)
 		}
 		return video, nil
-	default: // LocationGoogleDrive
-		video, err := s.uploadFromDrive(ctx, progress)
+	default:
+		video, err := s.uploadFromCloud(ctx, progress)
 		if err != nil {
-			return nil, fmt.Errorf("uploading drive file: %w", err)
+			return nil, fmt.Errorf("uploading cloud file: %w", err)
 		}
 		return video, nil
 	}
@@ -304,7 +337,7 @@ func (s *Service) uploadFile(progress func(int64)) (*youtube.Video, error) {
 	return nil, fmt.Errorf("finished without getting a success response")
 }
 
-func (s *Service) uploadFromDrive(ctx context.Context, progress func(int64)) (*youtube.Video, error) {
+func (s *Service) uploadFromCloud(ctx context.Context, progress func(int64)) (*youtube.Video, error) {
 	done, video, start, err := s.resume()
 	if err != nil {
 		return nil, fmt.Errorf("getting uploaded bytes: %w", err)
@@ -312,13 +345,29 @@ func (s *Service) uploadFromDrive(ctx context.Context, progress func(int64)) (*y
 	if done {
 		return video, nil
 	}
-	downloadRequest := s.DriveService.Files.Get(s.ContentFile).Context(ctx)
-	downloadRequest.Header().Set("Range", fmt.Sprintf("bytes=%d-", start))
-	download, err := downloadRequest.Download()
-	if err != nil {
-		return nil, fmt.Errorf("starting Google Drive download: %w", err)
+
+	var download io.ReadCloser
+	switch s.Location {
+	case LocationGoogleDrive:
+		downloadRequest := s.DriveService.Files.Get(s.ContentFile).Context(ctx)
+		downloadRequest.Header().Set("Range", fmt.Sprintf("bytes=%d-", start))
+		downloadResponse, err := downloadRequest.Download()
+		if err != nil {
+			return nil, fmt.Errorf("starting Google Drive download: %w", err)
+		}
+		download = downloadResponse.Body
+	case LocationDropbox:
+		dbx := files.New(*s.DropboxConfig)
+		arg := files.NewDownloadArg(s.ContentFile)
+		arg.ExtraHeaders = map[string]string{
+			"Range": fmt.Sprintf("bytes=%d-", start),
+		}
+		_, download, err = dbx.Download(arg)
+		if err != nil {
+			return nil, fmt.Errorf("downloading dropbox file: %w", err)
+		}
 	}
-	defer download.Body.Close()
+	defer download.Close()
 
 	client := &http.Client{}
 
@@ -332,7 +381,7 @@ func (s *Service) uploadFromDrive(ctx context.Context, progress func(int64)) (*y
 			bytesToRead = s.ContentLength - start
 		}
 
-		uploadReq, err := http.NewRequest("PUT", s.UploadURL, NewChunkReader(download.Body, s.ChunkSize))
+		uploadReq, err := http.NewRequest("PUT", s.UploadURL, NewChunkReader(download, s.ChunkSize))
 		if err != nil {
 			return nil, fmt.Errorf("creating upload request: %w", err)
 		}
@@ -345,42 +394,50 @@ func (s *Service) uploadFromDrive(ctx context.Context, progress func(int64)) (*y
 		if err != nil {
 			return nil, fmt.Errorf("sending chunk upload request: %w", err)
 		}
-		defer resp.Body.Close()
 
 		switch getStatus(resp.StatusCode) {
 		case StatusDone:
 			// upload complete - remove state
 			if err := os.Remove(s.StateFile); err != nil {
+				_ = resp.Body.Close()
 				return nil, fmt.Errorf("removing state file: %w", err)
 			}
 			// read response body for video information
 			v := &youtube.Video{}
 			if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+				_ = resp.Body.Close()
 				return nil, fmt.Errorf("decoding video information: %w", err)
 			}
+			_ = resp.Body.Close()
 			return v, nil
 		case StatusResume:
 			if last {
 				// upload complete - remove state
 				if err := os.Remove(s.StateFile); err != nil {
+					_ = resp.Body.Close()
 					return nil, fmt.Errorf("removing state file: %w", err)
 				}
 				// read response body for video information
 				v := &youtube.Video{}
 				if err := json.NewDecoder(resp.Body).Decode(v); err != nil {
+					_ = resp.Body.Close()
 					return nil, fmt.Errorf("decoding video information: %w", err)
 				}
+				_ = resp.Body.Close()
 				return v, nil
 			}
 			start = end + 1
+			_ = resp.Body.Close()
 			continue
 		case StatusFailed:
 			// upload permanently failed, remove state file (and ignore error)
 			_ = os.Remove(s.StateFile)
 			// read response body for error message
 			errorMessage, _ := io.ReadAll(resp.Body)
+			_ = resp.Body.Close()
 			return nil, fmt.Errorf("uploading chunk failed, status %d: %s", resp.StatusCode, errorMessage)
 		}
+		_ = resp.Body.Close()
 	}
 }
 
@@ -424,6 +481,7 @@ func (cr *ChunkReader) Read(p []byte) (n int, err error) {
 type fileLocation int
 
 const (
+	LocationDropbox     fileLocation = 0
 	LocationGoogleDrive fileLocation = 1
 	LocationLocal       fileLocation = 2
 )
@@ -460,4 +518,17 @@ func getStatus(code int) responseStatus {
 		// Response is failed
 		return StatusFailed
 	}
+}
+
+func getDropboxFileMetadata(c files.Client, path string) (files.IsMetadata, error) {
+	arg := files.NewGetMetadataArg(path)
+
+	arg.IncludeDeleted = true
+
+	res, err := c.GetMetadata(arg)
+	if err != nil {
+		return nil, err
+	}
+
+	return res, nil
 }

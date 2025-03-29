@@ -10,6 +10,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"path"
 	"strings"
 
 	"golang.org/x/oauth2"
@@ -25,7 +26,8 @@ func (s *Service) InitialiseServiceAccount(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("getting home dir: %w", err)
 	}
-	serviceAccountToken, err := os.ReadFile(home + "/.config/wildernessprime/google-service-account-token.json")
+	filePath := path.Join(home, ".config", "wildernessprime", "google-service-account-token.json")
+	serviceAccountToken, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("unable to read service account file: %w", err)
 	}
@@ -51,7 +53,8 @@ func (s *Service) InitialiseYoutubeAuthentication(ctx context.Context) error {
 	if err != nil {
 		return fmt.Errorf("getting home dir: %w", err)
 	}
-	oauth2Credentials, err := os.ReadFile(home + "/.config/wildernessprime/youtube-oauth2-client-secret.json")
+	filePath := path.Join(home, ".config", "wildernessprime", "youtube-oauth2-client-secret.json")
+	oauth2Credentials, err := os.ReadFile(filePath)
 	if err != nil {
 		return fmt.Errorf("unable to read OAuth2 credentials file: %w", err)
 	}
@@ -122,9 +125,9 @@ func getToken(ctx context.Context, config *oauth2.Config) (*oauth2.Token, error)
 	if err != nil {
 		return nil, fmt.Errorf("getting home dir: %w", err)
 	}
-	tokenFile := home + "/.config/wildernessprime/youtube-oauth2-refresh-token.json"
+	filePath := path.Join(home, ".config", "wildernessprime", "youtube-oauth2-refresh-token.json")
 
-	token, err := tokenFromFile(tokenFile)
+	token, err := tokenFromFile(filePath)
 	if err == nil {
 		return token, nil
 	}
@@ -167,7 +170,7 @@ func getToken(ctx context.Context, config *oauth2.Config) (*oauth2.Token, error)
 		return nil, fmt.Errorf("unable to retrieve token from web: %w", err)
 	}
 
-	if err := saveToken(tokenFile, token); err != nil {
+	if err := saveToken(filePath, token); err != nil {
 		return nil, fmt.Errorf("unable to save token: %w", err)
 	}
 

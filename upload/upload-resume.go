@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"os"
+	"path"
 
 	"github.com/dave/youtube/resume"
 )
@@ -35,17 +36,32 @@ func (s *Service) getResume() (*resume.Service, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getting home dir: %w", err)
 	}
-	stateFilePath := home + "/.config/wildernessprime/uploader-state.json"
+	filePath := path.Join(home, ".config", "wildernessprime", "uploader-state.json")
 
-	res, err := resume.NewGoogleDrive(
-		s.DriveService,
-		s.YoutubeAccessToken,
-		1024*1024*16, // 16MB
-		stateFilePath,
-	)
-	if err != nil {
-		return nil, fmt.Errorf("initialising uploader: %w", err)
+	var res *resume.Service
+	switch s.StorageService {
+	case GoogleDriveStorage:
+		res, err = resume.NewGoogleDrive(
+			s.DriveService,
+			s.YoutubeAccessToken,
+			1024*1024*16, // 16MB
+			filePath,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("initialising google drive resumer: %w", err)
+		}
+	case DropboxStorage:
+		res, err = resume.NewDropbox(
+			s.DropboxConfig,
+			s.YoutubeAccessToken,
+			1024*1024*16, // 16MB
+			filePath,
+		)
+		if err != nil {
+			return nil, fmt.Errorf("initialising dropbox resumer: %w", err)
+		}
 	}
+
 	return res, nil
 
 }

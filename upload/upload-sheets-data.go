@@ -10,6 +10,7 @@ import (
 	"text/template"
 	"time"
 
+	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox/files"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/youtube/v3"
 )
@@ -31,9 +32,10 @@ func (s *Sheet) FullName() string {
 }
 
 type Global struct {
-	Preview                 bool
-	Production              bool
-	PreviewThumbnailsFolder string
+	Preview                  bool
+	Production               bool
+	PreviewThumbnailsFolder  string
+	PreviewThumbnailsDropbox string
 }
 
 type Expedition struct {
@@ -45,6 +47,8 @@ type Expedition struct {
 	Thumbnails         bool
 	VideosFolder       string
 	ThumbnailsFolder   string
+	VideosDropbox      string
+	ThumbnailsDropbox  string
 	ExpeditionPlaylist bool
 	SectionPlaylists   bool
 	Data               map[string]Cell
@@ -68,22 +72,24 @@ type Section struct {
 }
 
 type Item struct {
-	RowId         int
-	Type          string
-	Key           int
-	Video         bool
-	Template      string
-	Ready         bool
-	Release       time.Time
-	From, To      Location
-	Via           []Location
-	Section       *Section
-	Expedition    *Expedition
-	Data          map[string]Cell
-	VideoFile     *drive.File
-	ThumbnailFile *drive.File
-	YoutubeId     string
-	YoutubeVideo  *youtube.Video
+	RowId                int
+	Type                 string
+	Key                  int
+	Video                bool
+	Template             string
+	Ready                bool
+	Release              time.Time
+	From, To             Location
+	Via                  []Location
+	Section              *Section
+	Expedition           *Expedition
+	Data                 map[string]Cell
+	VideoFile            *drive.File
+	ThumbnailFile        *drive.File
+	VideoDropboxFile     *files.FileMetadata
+	ThumbnailDropboxFile *files.FileMetadata
+	YoutubeId            string
+	YoutubeVideo         *youtube.Video
 }
 
 type Location struct {

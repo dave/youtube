@@ -9,8 +9,10 @@ import (
 	"image/jpeg"
 	"io"
 	"os"
+	"path"
 
 	"github.com/disintegration/imaging"
+	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox/files"
 	"github.com/edwvee/exiffix"
 	"github.com/golang/freetype"
 	"github.com/golang/freetype/truetype"
@@ -61,16 +63,30 @@ func updateThumbnail(s *Service, item *Item) error {
 	}
 
 	fmt.Printf("Updating thumbnail (%v)\n", item.String())
-	download, err := s.DriveService.Files.Get(item.ThumbnailFile.Id).Download()
-	if err != nil {
-		return fmt.Errorf("downloading drive file (%v): %w", item.String(), err)
+	var download io.ReadCloser
+	switch s.StorageService {
+	case GoogleDriveStorage:
+		response, err := s.DriveService.Files.Get(item.ThumbnailFile.Id).Download()
+		if err != nil {
+			return fmt.Errorf("downloading drive file (%v): %w", item.String(), err)
+		}
+		download = response.Body
+	case DropboxStorage:
+		dbx := files.New(*s.DropboxConfig)
+		arg := files.NewDownloadArg(item.ThumbnailDropboxFile.Id)
+		var err error
+		_, download, err = dbx.Download(arg)
+		if err != nil {
+			return fmt.Errorf("downloading dropbox file (%v): %w", item.String(), err)
+		}
 	}
-	transformed, err := transformImage(download.Body, textTopBuffer.String(), textBottomBuffer.String())
+
+	transformed, err := transformImage(download, textTopBuffer.String(), textBottomBuffer.String())
 	if err != nil {
-		_ = download.Body.Close()
+		_ = download.Close()
 		return fmt.Errorf("transforming thumbnail (%v): %w", item.String(), err)
 	}
-	_ = download.Body.Close()
+	_ = download.Close()
 
 	transformedBytes, err := io.ReadAll(transformed)
 	if err != nil {
@@ -80,13 +96,26 @@ func updateThumbnail(s *Service, item *Item) error {
 	if s.Global.Preview {
 		s.StoreVideoPreview(item, "thumbnail_top", "", textTopBuffer.String())
 		s.StoreVideoPreview(item, "thumbnail_bottom", "", textBottomBuffer.String())
-		fileMetadata := &drive.File{
-			Name:    fmt.Sprintf("[%v]", item.String()),
-			Parents: []string{s.Global.PreviewThumbnailsFolder},
+		switch s.StorageService {
+		case GoogleDriveStorage:
+			fileMetadata := &drive.File{
+				Name:    fmt.Sprintf("[%v]", item.String()),
+				Parents: []string{s.Global.PreviewThumbnailsFolder},
+			}
+			if _, err := s.DriveService.Files.Create(fileMetadata).Media(bytes.NewReader(transformedBytes)).Do(); err != nil {
+				return fmt.Errorf("creating preview thumbnail on google drive (%v): %w", item.String(), err)
+			}
+		case DropboxStorage:
+			previewThumbnailsDropbox, err := getDropboxPathFromSharedLink(s.DropboxConfig, s.Global.PreviewThumbnailsDropbox)
+			if err != nil {
+				return fmt.Errorf("getting dropbox path (%v): %w", item.String(), err)
+			}
+			filePath := path.Join(previewThumbnailsDropbox, fmt.Sprintf("[%v].jpg", item.String()))
+			if err := uploadToDropbox(s.DropboxConfig, bytes.NewReader(transformedBytes), filePath, int64(len(transformedBytes))); err != nil {
+				return fmt.Errorf("creating preview thumbnail on dropbox (%v): %w", item.String(), err)
+			}
 		}
-		if _, err := s.DriveService.Files.Create(fileMetadata).Media(bytes.NewReader(transformedBytes)).Do(); err != nil {
-			return fmt.Errorf("creating file (%v): %w", item.String(), err)
-		}
+
 	}
 	if s.Global.Production {
 		if item.YoutubeVideo == nil {
@@ -218,7 +247,8 @@ func getFont(fname string) (*truetype.Font, error) {
 	if err != nil {
 		return nil, fmt.Errorf("getting home dir: %w", err)
 	}
-	fontBytes, err := os.ReadFile(home + "/.config/wildernessprime/" + fname)
+	filePath := path.Join(home, ".config", "wildernessprime", fname)
+	fontBytes, err := os.ReadFile(filePath)
 	if err != nil {
 		return nil, fmt.Errorf("reading font file: %w", err)
 	}

@@ -234,7 +234,14 @@ func (s *Service) createVideo(ctx context.Context, item *Item) error {
 		progress := func(start int64) {
 			fmt.Printf(" - uploaded %d of %d bytes (%.2f%%)\n", start, res.ContentLength, float64(start)/float64(res.ContentLength)*100)
 		}
-		if err := res.Initialise(item.VideoFile.Id, video); err != nil {
+		var videoFileId string
+		switch s.StorageService {
+		case GoogleDriveStorage:
+			videoFileId = item.VideoFile.Id
+		case DropboxStorage:
+			videoFileId = item.VideoDropboxFile.Id
+		}
+		if err := res.Initialise(videoFileId, video); err != nil {
 			return fmt.Errorf("initialising upload (%v): %w", item.String(), err)
 		}
 		insertedVideo, err := res.Upload(ctx, progress)

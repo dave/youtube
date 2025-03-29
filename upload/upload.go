@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"net/http"
 
+	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox"
 	"google.golang.org/api/drive/v3"
 	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/youtube/v3"
@@ -12,12 +13,14 @@ import (
 
 type Service struct {
 	Global               *Global
+	StorageService       StorageServices
 	ChannelId            string
 	SheetsService        *sheets.Service
 	YoutubeService       *youtube.Service
 	YoutubeAccessToken   string
 	ServiceAccountClient *http.Client
 	DriveService         *drive.Service
+	DropboxConfig        *dropbox.Config
 	Spreadsheet          *sheets.Spreadsheet
 	Sheets               map[string]*Sheet
 	Expeditions          map[string]*Expedition
@@ -30,6 +33,7 @@ type Service struct {
 func New(channelId string) *Service {
 
 	s := &Service{}
+	s.StorageService = DropboxStorage
 	s.Sheets = map[string]*Sheet{}
 	s.Expeditions = map[string]*Expedition{}
 	s.YoutubeVideos = map[string]*youtube.Video{}
@@ -60,6 +64,10 @@ func (s *Service) Start(ctx context.Context) error {
 
 		if err := s.InitDriveService(); err != nil {
 			return fmt.Errorf("init drive service: %w", err)
+		}
+
+		if err := s.InitDropboxService(); err != nil {
+			return fmt.Errorf("init dropbox service: %w", err)
 		}
 
 		if err := s.InitSheetsService(); err != nil {
@@ -117,6 +125,9 @@ func (s *Service) Start(ctx context.Context) error {
 		if err := s.ClearPreviewFolder(); err != nil {
 			return fmt.Errorf("unable to clear preview folder: %w", err)
 		}
+		if err := s.ClearDropboxPreviewFolder(); err != nil {
+			return fmt.Errorf("unable to clear dropbox preview folder: %w", err)
+		}
 	}
 
 	// GET DATA FROM YOUTUBE
@@ -142,6 +153,9 @@ func (s *Service) Start(ctx context.Context) error {
 	{
 		if err := s.FindDriveFiles(); err != nil {
 			return fmt.Errorf("unable to find drive files: %w", err)
+		}
+		if err := s.FindDropboxFiles(); err != nil {
+			return fmt.Errorf("unable to find dropbox files: %w", err)
 		}
 	}
 
@@ -176,3 +190,10 @@ func (s *Service) Start(ctx context.Context) error {
 
 	return nil
 }
+
+type StorageServices int
+
+const (
+	GoogleDriveStorage StorageServices = 1
+	DropboxStorage     StorageServices = 2
+)

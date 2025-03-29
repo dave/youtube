@@ -130,9 +130,10 @@ func (s *Service) GetSheetData(titles ...string) error {
 
 func (s *Service) ParseGlobal() error {
 	s.Global = &Global{
-		Preview:                 s.Sheets["global"].DataByRef["preview"]["value"].Bool(),
-		Production:              s.Sheets["global"].DataByRef["production"]["value"].Bool(),
-		PreviewThumbnailsFolder: s.Sheets["global"].DataByRef["preview_thumbnails_folder"]["value"].String(),
+		Preview:                  s.Sheets["global"].DataByRef["preview"]["value"].Bool(),
+		Production:               s.Sheets["global"].DataByRef["production"]["value"].Bool(),
+		PreviewThumbnailsFolder:  s.Sheets["global"].DataByRef["preview_thumbnails_folder"]["value"].String(),
+		PreviewThumbnailsDropbox: s.Sheets["global"].DataByRef["preview_thumbnails_dropbox"]["value"].String(),
 	}
 
 	return nil
@@ -278,6 +279,8 @@ func (s *Service) ParseExpeditions() error {
 			Thumbnails:         data["thumbnails"].Bool(),
 			VideosFolder:       data["videos_folder"].String(),
 			ThumbnailsFolder:   data["thumbnails_folder"].String(),
+			VideosDropbox:      data["videos_dropbox"].String(),
+			ThumbnailsDropbox:  data["thumbnails_dropbox"].String(),
 			ExpeditionPlaylist: data["expedition_playlist"].Bool(),
 			SectionPlaylists:   data["section_playlists"].Bool(),
 			Data:               data,

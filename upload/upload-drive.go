@@ -12,6 +12,10 @@ import (
 
 func (s *Service) InitDriveService() error {
 
+	if s.StorageService != GoogleDriveStorage {
+		return nil
+	}
+
 	driveService, err := drive.New(s.ServiceAccountClient)
 	if err != nil {
 		return fmt.Errorf("unable to initialise drive service: %w", err)
@@ -22,6 +26,11 @@ func (s *Service) InitDriveService() error {
 }
 
 func (s *Service) ClearPreviewFolder() error {
+
+	if s.StorageService != GoogleDriveStorage {
+		return nil
+	}
+
 	if !s.Global.Preview {
 		return nil
 	}
@@ -35,6 +44,10 @@ func (s *Service) ClearPreviewFolder() error {
 }
 
 func (s *Service) FindDriveFiles() error {
+
+	if s.StorageService != GoogleDriveStorage {
+		return nil
+	}
 
 	for _, expedition := range s.Expeditions {
 		if !expedition.Process {
@@ -151,6 +164,7 @@ func deleteAllFilesInFolder(srv *drive.Service, folderId string) error {
 
 	// Step 2: Delete each file
 	for _, file := range fileList.Files {
+		fmt.Println("Deleting file from google drive:", file.Name)
 		if err := srv.Files.Delete(file.Id).Do(); err != nil {
 			return fmt.Errorf("deleting file %s: %w", file.Id, err)
 		}

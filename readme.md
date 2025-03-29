@@ -32,7 +32,7 @@ Oracle gives out free VMs, so that's what I've been using to run the tool.
 
 # Keys
 
-This tool uses two keys, which you will need to copy into `~/.config/wildernessprime/`.
+This tool uses three keys, which you will need to copy into `~/.config/wildernessprime/`.
 
 ## google-service-account-token.json
 This is the service account key for authenticating with Google Sheets and Google Drive.
@@ -45,6 +45,20 @@ This is the OAuth2 client secret for authenticating with YouTube.
 Create here: https://console.cloud.google.com/auth/clients?inv=1&invt=AbqgZQ&project=wildernessprime
 
 Refresh token `youtube-oauth2-refresh-token.json` is created automatically by the oauth login script the first time it runs.
+
+## dropbox-oauth-access-token.txt
+This is the Dropbox access token for authenticating with Dropbox. To authenticate, you need to create a Dropbox app and generate an access token:
+
+https://www.dropbox.com/developers/apps/create
+
+Add permissions:
+- files.metadata.write
+- files.metadata.read
+- files.content.write
+- files.content.read
+- sharing.read
+
+Click "Generate" under "Generated access token" to create the access token.
 
 # Google service account
 
