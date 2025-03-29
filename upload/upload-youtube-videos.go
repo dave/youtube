@@ -345,7 +345,7 @@ func (y *YoutubeFields) Apply(video *youtube.Video) Changes {
 			c.Changed = true
 			video.Status.PrivacyStatus = y.PrivacyStatus
 		}
-		if video.Status.PublishAt != timeToYoutube(y.PublishAt) {
+		if !youtubeTimeEqual(video.Status.PublishAt, y.PublishAt) {
 			c.Changed = true
 			video.Status.PublishAt = timeToYoutube(y.PublishAt)
 		}
@@ -389,4 +389,12 @@ func (y *YoutubeFields) Apply(video *youtube.Video) Changes {
 
 func timeToYoutube(t time.Time) string {
 	return strings.TrimSuffix(t.Format(time.RFC3339), "Z") + ".0Z"
+}
+
+func youtubeTimeEqual(s string, t time.Time) bool {
+	t1, err := time.Parse(time.RFC3339, s)
+	if err != nil {
+		return false
+	}
+	return t.Equal(t1)
 }
