@@ -214,8 +214,9 @@ func (s *Service) createVideo(ctx context.Context, item *Item) error {
 		return fmt.Errorf("getting uploader (%v): %w", item.String(), err)
 	}
 	if res.State == resume.StateUploadInProgress {
-		return fmt.Errorf("upload already in progress")
+		return fmt.Errorf("upload already in progress (%v)", item.String())
 	}
+
 	video := &youtube.Video{}
 
 	changes, err := Apply(item, video)
@@ -237,9 +238,9 @@ func (s *Service) createVideo(ctx context.Context, item *Item) error {
 		var videoFileId string
 		switch s.StorageService {
 		case GoogleDriveStorage:
-			videoFileId = item.VideoFile.Id
+			videoFileId = item.VideoGoogleDrive.Id
 		case DropboxStorage:
-			videoFileId = item.VideoDropboxFile.Id
+			videoFileId = item.VideoDropbox.Id
 		}
 		if err := res.Initialise(videoFileId, video); err != nil {
 			return fmt.Errorf("initialising upload (%v): %w", item.String(), err)

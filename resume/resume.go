@@ -107,18 +107,18 @@ func (s *Service) Initialise(contentFile string, data *youtube.Video) error {
 	case LocationGoogleDrive:
 		sizeResponse, err := s.DriveService.Files.Get(s.ContentFile).Fields("size").Do()
 		if err != nil {
-			return fmt.Errorf("getting size of content: %w", err)
+			return fmt.Errorf("getting size of google drive content (%v): %w", s.ContentFile, err)
 		}
 		s.ContentLength = sizeResponse.Size
 	case LocationDropbox:
 		dbx := files.New(*s.DropboxConfig)
-		metaRes, err := getDropboxFileMetadata(dbx, s.ContentFile)
+		meta, err := dbx.GetMetadata(files.NewGetMetadataArg(s.ContentFile))
 		if err != nil {
-			return fmt.Errorf("getting dropbox metadata: %w", err)
+			return fmt.Errorf("getting dropbox metadata (%v): %w", s.ContentFile, err)
 		}
-		fileMeta, ok := metaRes.(*files.FileMetadata)
+		fileMeta, ok := meta.(*files.FileMetadata)
 		if !ok {
-			return fmt.Errorf("failed to get dropbox file metadata (%v)", s.ContentFile)
+			return fmt.Errorf("dropbox metadata is not file (%v)", s.ContentFile)
 		}
 		s.ContentLength = int64(fileMeta.Size)
 	}
@@ -349,13 +349,13 @@ func (s *Service) uploadFromCloud(ctx context.Context, progress func(int64)) (*y
 	var download io.ReadCloser
 	switch s.Location {
 	case LocationGoogleDrive:
-		downloadRequest := s.DriveService.Files.Get(s.ContentFile).Context(ctx)
-		downloadRequest.Header().Set("Range", fmt.Sprintf("bytes=%d-", start))
-		downloadResponse, err := downloadRequest.Download()
+		req := s.DriveService.Files.Get(s.ContentFile).Context(ctx)
+		req.Header().Set("Range", fmt.Sprintf("bytes=%d-", start))
+		resp, err := req.Download()
 		if err != nil {
 			return nil, fmt.Errorf("starting Google Drive download: %w", err)
 		}
-		download = downloadResponse.Body
+		download = resp.Body
 	case LocationDropbox:
 		dbx := files.New(*s.DropboxConfig)
 		arg := files.NewDownloadArg(s.ContentFile)
@@ -518,17 +518,4 @@ func getStatus(code int) responseStatus {
 		// Response is failed
 		return StatusFailed
 	}
-}
-
-func getDropboxFileMetadata(c files.Client, path string) (files.IsMetadata, error) {
-	arg := files.NewGetMetadataArg(path)
-
-	arg.IncludeDeleted = true
-
-	res, err := c.GetMetadata(arg)
-	if err != nil {
-		return nil, err
-	}
-
-	return res, nil
 }

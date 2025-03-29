@@ -62,7 +62,7 @@ func (s *Service) Start(ctx context.Context) error {
 			return fmt.Errorf("init youtube auth: %w", err)
 		}
 
-		if err := s.InitDriveService(); err != nil {
+		if err := s.InitGoogleDriveService(); err != nil {
 			return fmt.Errorf("init drive service: %w", err)
 		}
 
@@ -122,7 +122,7 @@ func (s *Service) Start(ctx context.Context) error {
 		if err := s.ClearPreviewSheet(); err != nil {
 			return fmt.Errorf("unable to clear preview sheet: %w", err)
 		}
-		if err := s.ClearPreviewFolder(); err != nil {
+		if err := s.ClearGoogleDrivePreviewFolder(); err != nil {
 			return fmt.Errorf("unable to clear preview folder: %w", err)
 		}
 		if err := s.ClearDropboxPreviewFolder(); err != nil {
@@ -151,7 +151,7 @@ func (s *Service) Start(ctx context.Context) error {
 
 	// GET DATA FROM DRIVE
 	{
-		if err := s.FindDriveFiles(); err != nil {
+		if err := s.FindGoogleDriveFiles(); err != nil {
 			return fmt.Errorf("unable to find drive files: %w", err)
 		}
 		if err := s.FindDropboxFiles(); err != nil {

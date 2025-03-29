@@ -31,38 +31,6 @@ func (s *Service) InitDropboxService() error {
 	return nil
 }
 
-func readDropboxToken() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("getting home dir: %w", err)
-	}
-	filePath := path.Join(home, ".config", "wildernessprime", "dropbox-oauth-access-token.txt")
-	b, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(b)), nil
-}
-
-func getDropboxPathFromSharedLink(config *dropbox.Config, sharedLink string) (string, error) {
-	dbx := sharing.New(*config)
-	arg := sharing.NewGetSharedLinkMetadataArg(sharedLink)
-
-	res, err := dbx.GetSharedLinkMetadata(arg)
-	if err != nil {
-		return "", fmt.Errorf("get shared link metadata: %w", err)
-	}
-
-	switch meta := res.(type) {
-	case *sharing.FileLinkMetadata:
-		return meta.PathLower, nil
-	case *sharing.FolderLinkMetadata:
-		return meta.PathLower, nil
-	default:
-		return "", fmt.Errorf("unsupported shared link type")
-	}
-}
-
 func (s *Service) ClearDropboxPreviewFolder() error {
 	if !s.Global.Preview {
 		return nil
@@ -105,11 +73,11 @@ func (s *Service) FindDropboxFiles() error {
 
 			if !gotFiles {
 				var err error
-				videoFiles, err = getDropboxFilesInFolder(s.DropboxConfig, expedition.VideosDropbox)
+				videoFiles, err = getFilesInDropboxFolder(s.DropboxConfig, expedition.VideosDropbox)
 				if err != nil {
 					return fmt.Errorf("get video files (%v): %w", item.String(), err)
 				}
-				thumbnailFiles, err = getDropboxFilesInFolder(s.DropboxConfig, expedition.ThumbnailsDropbox)
+				thumbnailFiles, err = getFilesInDropboxFolder(s.DropboxConfig, expedition.ThumbnailsDropbox)
 				if err != nil {
 					return fmt.Errorf("get video files (%v): %w", item.String(), err)
 				}
@@ -127,11 +95,11 @@ func (s *Service) FindDropboxFiles() error {
 				}
 				for filename := range videoFiles {
 					if videoFilenameRegex.MatchString(filename) {
-						item.VideoDropboxFile = videoFiles[filename]
+						item.VideoDropbox = videoFiles[filename]
 						break
 					}
 				}
-				if item.VideoDropboxFile == nil {
+				if item.VideoDropbox == nil {
 					return fmt.Errorf("no video file found (%v)", item.String())
 				}
 			}
@@ -147,11 +115,11 @@ func (s *Service) FindDropboxFiles() error {
 				}
 				for filename := range thumbnailFiles {
 					if thumbnailFilenameRegex.MatchString(filename) {
-						item.ThumbnailDropboxFile = thumbnailFiles[filename]
+						item.ThumbnailDropbox = thumbnailFiles[filename]
 						break
 					}
 				}
-				if item.ThumbnailDropboxFile == nil {
+				if item.ThumbnailDropbox == nil {
 					return fmt.Errorf("no thumbnail file found (%v)", item.String())
 				}
 			}
@@ -161,7 +129,7 @@ func (s *Service) FindDropboxFiles() error {
 	return nil
 }
 
-func getDropboxFilesInFolder(config *dropbox.Config, folderUrl string) (map[string]*files.FileMetadata, error) {
+func getFilesInDropboxFolder(config *dropbox.Config, folderUrl string) (map[string]*files.FileMetadata, error) {
 
 	dbx := files.New(*config)
 
@@ -171,7 +139,7 @@ func getDropboxFilesInFolder(config *dropbox.Config, folderUrl string) (map[stri
 	}
 
 	// check if given object exists
-	metaRes, err := getFileMetadata(dbx, folderPath)
+	metaRes, err := getDropboxFileMetadata(dbx, folderPath)
 	if err != nil {
 		return nil, fmt.Errorf("get dropbox metadata: %w", err)
 	}
@@ -194,7 +162,7 @@ func getDropboxFilesInFolder(config *dropbox.Config, folderUrl string) (map[stri
 			// get_metadata request for the same path and using that response instead.
 			if listRevisionError.EndpointError.Path.Tag == files.LookupErrorNotFolder {
 				var metaRes files.IsMetadata
-				metaRes, err = getFileMetadata(dbx, folderPath)
+				metaRes, err = getDropboxFileMetadata(dbx, folderPath)
 				entries = []files.IsMetadata{metaRes}
 			} else {
 				// Return if there's an error other than "not_folder" or if the follow-up
@@ -234,8 +202,7 @@ func getDropboxFilesInFolder(config *dropbox.Config, folderUrl string) (map[stri
 	return filesMap, nil
 }
 
-// Sends a get_metadata request for a given path and returns the response
-func getFileMetadata(c files.Client, path string) (files.IsMetadata, error) {
+func getDropboxFileMetadata(c files.Client, path string) (files.IsMetadata, error) {
 	arg := files.NewGetMetadataArg(path)
 
 	arg.IncludeDeleted = true
@@ -253,7 +220,7 @@ func removeDropboxFiles(config *dropbox.Config, folderUrl string) error {
 	var filesMetadata []*files.FileMetadata
 	dbx := files.New(*config)
 
-	allFiles, err := getDropboxFilesInFolder(config, folderUrl)
+	allFiles, err := getFilesInDropboxFolder(config, folderUrl)
 	for _, metadata := range allFiles {
 		filesMetadata = append(filesMetadata, metadata)
 	}
@@ -268,4 +235,36 @@ func removeDropboxFiles(config *dropbox.Config, folderUrl string) error {
 	}
 
 	return nil
+}
+
+func readDropboxToken() (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("getting home dir: %w", err)
+	}
+	filePath := path.Join(home, ".config", "wildernessprime", "dropbox-oauth-access-token.txt")
+	b, err := os.ReadFile(filePath)
+	if err != nil {
+		return "", err
+	}
+	return strings.TrimSpace(string(b)), nil
+}
+
+func getDropboxPathFromSharedLink(config *dropbox.Config, sharedLink string) (string, error) {
+	dbx := sharing.New(*config)
+	arg := sharing.NewGetSharedLinkMetadataArg(sharedLink)
+
+	res, err := dbx.GetSharedLinkMetadata(arg)
+	if err != nil {
+		return "", fmt.Errorf("get shared link metadata: %w", err)
+	}
+
+	switch meta := res.(type) {
+	case *sharing.FileLinkMetadata:
+		return meta.PathLower, nil
+	case *sharing.FolderLinkMetadata:
+		return meta.PathLower, nil
+	default:
+		return "", fmt.Errorf("unsupported shared link type")
+	}
 }

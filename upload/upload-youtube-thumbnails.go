@@ -66,14 +66,14 @@ func updateThumbnail(s *Service, item *Item) error {
 	var download io.ReadCloser
 	switch s.StorageService {
 	case GoogleDriveStorage:
-		response, err := s.DriveService.Files.Get(item.ThumbnailFile.Id).Download()
+		response, err := s.DriveService.Files.Get(item.ThumbnailGoogleDrive.Id).Download()
 		if err != nil {
 			return fmt.Errorf("downloading drive file (%v): %w", item.String(), err)
 		}
 		download = response.Body
 	case DropboxStorage:
 		dbx := files.New(*s.DropboxConfig)
-		arg := files.NewDownloadArg(item.ThumbnailDropboxFile.Id)
+		arg := files.NewDownloadArg(item.ThumbnailDropbox.Id)
 		var err error
 		_, download, err = dbx.Download(arg)
 		if err != nil {
@@ -115,7 +115,6 @@ func updateThumbnail(s *Service, item *Item) error {
 				return fmt.Errorf("creating preview thumbnail on dropbox (%v): %w", item.String(), err)
 			}
 		}
-
 	}
 	if s.Global.Production {
 		if item.YoutubeVideo == nil {

@@ -3,14 +3,12 @@ package upload
 import (
 	"bytes"
 	"fmt"
-	"io"
 	"regexp"
-	"sync"
 
 	"google.golang.org/api/drive/v3"
 )
 
-func (s *Service) InitDriveService() error {
+func (s *Service) InitGoogleDriveService() error {
 
 	if s.StorageService != GoogleDriveStorage {
 		return nil
@@ -25,7 +23,7 @@ func (s *Service) InitDriveService() error {
 	return nil
 }
 
-func (s *Service) ClearPreviewFolder() error {
+func (s *Service) ClearGoogleDrivePreviewFolder() error {
 
 	if s.StorageService != GoogleDriveStorage {
 		return nil
@@ -37,13 +35,13 @@ func (s *Service) ClearPreviewFolder() error {
 
 	fmt.Println("Clearing preview folder")
 
-	if err := deleteAllFilesInFolder(s.DriveService, s.Global.PreviewThumbnailsFolder); err != nil {
+	if err := deleteAllFilesInGoogleDriveFolder(s.DriveService, s.Global.PreviewThumbnailsFolder); err != nil {
 		return fmt.Errorf("clearing preview folder: %w", err)
 	}
 	return nil
 }
 
-func (s *Service) FindDriveFiles() error {
+func (s *Service) FindGoogleDriveFiles() error {
 
 	if s.StorageService != GoogleDriveStorage {
 		return nil
@@ -76,11 +74,11 @@ func (s *Service) FindDriveFiles() error {
 
 			if !gotFiles {
 				var err error
-				videoFiles, err = getFilesInFolder(s.DriveService, expedition.VideosFolder)
+				videoFiles, err = getFilesInGoogleDriveFolder(s.DriveService, expedition.VideosFolder)
 				if err != nil {
 					return fmt.Errorf("get video files (%v): %w", item.String(), err)
 				}
-				thumbnailFiles, err = getFilesInFolder(s.DriveService, expedition.ThumbnailsFolder)
+				thumbnailFiles, err = getFilesInGoogleDriveFolder(s.DriveService, expedition.ThumbnailsFolder)
 				if err != nil {
 					return fmt.Errorf("get video files (%v): %w", item.String(), err)
 				}
@@ -98,11 +96,11 @@ func (s *Service) FindDriveFiles() error {
 				}
 				for filename := range videoFiles {
 					if videoFilenameRegex.MatchString(filename) {
-						item.VideoFile = videoFiles[filename]
+						item.VideoGoogleDrive = videoFiles[filename]
 						break
 					}
 				}
-				if item.VideoFile == nil {
+				if item.VideoGoogleDrive == nil {
 					return fmt.Errorf("no video file found (%v)", item.String())
 				}
 			}
@@ -118,11 +116,11 @@ func (s *Service) FindDriveFiles() error {
 				}
 				for filename := range thumbnailFiles {
 					if thumbnailFilenameRegex.MatchString(filename) {
-						item.ThumbnailFile = thumbnailFiles[filename]
+						item.ThumbnailGoogleDrive = thumbnailFiles[filename]
 						break
 					}
 				}
-				if item.ThumbnailFile == nil {
+				if item.ThumbnailGoogleDrive == nil {
 					return fmt.Errorf("no thumbnail file found (%v)", item.String())
 				}
 			}
@@ -132,7 +130,7 @@ func (s *Service) FindDriveFiles() error {
 	return nil
 }
 
-func getFilesInFolder(srv *drive.Service, folderId string) (map[string]*drive.File, error) {
+func getFilesInGoogleDriveFolder(srv *drive.Service, folderId string) (map[string]*drive.File, error) {
 	var done bool
 	var page string
 	files := map[string]*drive.File{}
@@ -154,7 +152,7 @@ func getFilesInFolder(srv *drive.Service, folderId string) (map[string]*drive.Fi
 	return files, nil
 }
 
-func deleteAllFilesInFolder(srv *drive.Service, folderId string) error {
+func deleteAllFilesInGoogleDriveFolder(srv *drive.Service, folderId string) error {
 	// Step 1: List all files in the folder
 	query := fmt.Sprintf("'%s' in parents and trashed = false", folderId)
 	fileList, err := srv.Files.List().Q(query).Fields("files(id)").Do()
@@ -170,85 +168,5 @@ func deleteAllFilesInFolder(srv *drive.Service, folderId string) error {
 		}
 	}
 
-	return nil
-}
-
-type DriveReaderAt struct {
-	service  *drive.Service
-	fileID   string
-	mu       sync.Mutex
-	resp     io.ReadCloser // Current open response body
-	lastOff  int64         // Last read offset
-	lastSize int           // Last read size
-	closed   bool          // Track if the reader is closed
-}
-
-// NewDriveReaderAt initializes a DriveReaderAt.
-func NewDriveReaderAt(svc *drive.Service, fileID string) *DriveReaderAt {
-	return &DriveReaderAt{service: svc, fileID: fileID}
-}
-
-// ReadAt reads from Google Drive at a specific offset.
-func (d *DriveReaderAt) ReadAt(p []byte, off int64) (n int, err error) {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.closed {
-		return 0, fmt.Errorf("DriveReaderAt is closed")
-	}
-
-	// Check if we can reuse the existing response
-	if d.resp != nil && off == d.lastOff+int64(d.lastSize) {
-		n, err = io.ReadFull(d.resp, p)
-		if err == io.EOF {
-			d.resp.Close()
-			d.resp = nil
-		}
-		d.lastOff = off
-		d.lastSize = n
-		return n, err
-	}
-
-	// Close previous response if it exists (non-contiguous read)
-	if d.resp != nil {
-		d.resp.Close()
-		d.resp = nil
-	}
-
-	// Fetch the new byte range
-	req := d.service.Files.Get(d.fileID)
-	req.Header().Set("Range", fmt.Sprintf("bytes=%d-%d", off, off+int64(len(p))-1))
-
-	resp, err := req.Download()
-	if err != nil {
-		return 0, err
-	}
-
-	d.resp = resp.Body
-	d.lastOff = off
-	d.lastSize = len(p)
-
-	n, err = io.ReadFull(d.resp, p)
-	if err == io.EOF {
-		_ = d.resp.Close()
-		d.resp = nil
-	}
-	return n, err
-}
-
-// Close ensures the reader releases resources.
-func (d *DriveReaderAt) Close() error {
-	d.mu.Lock()
-	defer d.mu.Unlock()
-
-	if d.closed {
-		return nil
-	}
-
-	if d.resp != nil {
-		_ = d.resp.Close()
-		d.resp = nil
-	}
-	d.closed = true
 	return nil
 }

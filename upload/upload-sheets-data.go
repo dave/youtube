@@ -84,10 +84,10 @@ type Item struct {
 	Section              *Section
 	Expedition           *Expedition
 	Data                 map[string]Cell
-	VideoFile            *drive.File
-	ThumbnailFile        *drive.File
-	VideoDropboxFile     *files.FileMetadata
-	ThumbnailDropboxFile *files.FileMetadata
+	VideoGoogleDrive     *drive.File
+	ThumbnailGoogleDrive *drive.File
+	VideoDropbox         *files.FileMetadata
+	ThumbnailDropbox     *files.FileMetadata
 	YoutubeId            string
 	YoutubeVideo         *youtube.Video
 }
@@ -140,6 +140,7 @@ func (c Cell) String() string {
 		return ""
 	}
 }
+
 func (c Cell) Time() time.Time {
 	if c.Float() == 0 {
 		return time.Time{}
