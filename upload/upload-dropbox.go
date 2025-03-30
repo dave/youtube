@@ -41,7 +41,7 @@ func (s *Service) InitDropboxService(ctx context.Context) error {
 
 	if tokens[DropboxRefreshToken] == "" {
 
-		fmt.Printf("1. Go to %v\n", conf.AuthCodeURL("state"))
+		fmt.Printf("1. Go to %v\n", conf.AuthCodeURL("state", oauth2.SetAuthURLParam("token_access_type", "offline")))
 		fmt.Printf("2. Click \"Allow\" (you might have to log in first).\n")
 		fmt.Printf("3. Copy the authorization code.\n")
 		fmt.Printf("Enter the authorization code here: ")
@@ -51,11 +51,14 @@ func (s *Service) InitDropboxService(ctx context.Context) error {
 			return fmt.Errorf("scanning authorization code: %w", err)
 		}
 		ctx := context.Background()
-		token, err = conf.Exchange(ctx, code, oauth2.AccessTypeOffline)
+		token, err = conf.Exchange(ctx, code)
 		if err != nil {
 			return fmt.Errorf("exchanging authorization code: %w", err)
 		}
-		tokens[DropboxRefreshToken] = token.AccessToken
+		if token.RefreshToken == "" {
+			return fmt.Errorf("dropbox oauth2 response missing refresh token")
+		}
+		tokens[DropboxRefreshToken] = token.RefreshToken
 		if err := writeDropboxTokens(tokens); err != nil {
 			return fmt.Errorf("writing dropbox tokens: %w", err)
 		}
