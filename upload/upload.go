@@ -66,7 +66,7 @@ func (s *Service) Start(ctx context.Context) error {
 			return fmt.Errorf("init drive service: %w", err)
 		}
 
-		if err := s.InitDropboxService(); err != nil {
+		if err := s.InitDropboxService(ctx); err != nil {
 			return fmt.Errorf("init dropbox service: %w", err)
 		}
 

@@ -2,36 +2,163 @@ package upload
 
 import (
 	"bytes"
+	"context"
 	"fmt"
 	"os"
 	"path"
+	"path/filepath"
 	"regexp"
 	"strings"
 
 	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox/files"
 	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox/sharing"
+	"golang.org/x/oauth2"
 )
 
-func (s *Service) InitDropboxService() error {
-	token, err := readDropboxToken()
+func (s *Service) InitDropboxService(ctx context.Context) error {
+
+	if s.StorageService != DropboxStorage {
+		return nil
+	}
+
+	tokens, err := readDropboxTokens()
 	if err != nil {
 		return fmt.Errorf("reading dropbox token: %w", err)
 	}
+
+	if tokens[DropboxClientID] == "" || tokens[DropboxClientSecret] == "" {
+		return fmt.Errorf("missing dropbox client id or secret")
+	}
+
+	conf := &oauth2.Config{
+		ClientID:     tokens[DropboxClientID],
+		ClientSecret: tokens[DropboxClientSecret],
+		Endpoint:     dropbox.OAuthEndpoint(""),
+	}
+
+	var token *oauth2.Token
+
+	if tokens[DropboxAccessToken] == "" || tokens[DropboxRefreshToken] == "" {
+
+		fmt.Printf("1. Go to %v\n", conf.AuthCodeURL("state"))
+		fmt.Printf("2. Click \"Allow\" (you might have to log in first).\n")
+		fmt.Printf("3. Copy the authorization code.\n")
+		fmt.Printf("Enter the authorization code here: ")
+
+		var code string
+		if _, err = fmt.Scan(&code); err != nil {
+			return fmt.Errorf("scanning authorization code: %w", err)
+		}
+		ctx := context.Background()
+		token, err = conf.Exchange(ctx, code, oauth2.AccessTypeOffline)
+		if err != nil {
+			return fmt.Errorf("exchanging authorization code: %w", err)
+		}
+		tokens[DropboxAccessToken] = token.AccessToken
+		tokens[DropboxRefreshToken] = token.RefreshToken
+		if err := writeDropboxTokens(tokens); err != nil {
+			return fmt.Errorf("writing dropbox tokens: %w", err)
+		}
+	} else {
+		token = &oauth2.Token{
+			AccessToken:  tokens[DropboxAccessToken],
+			RefreshToken: tokens[DropboxRefreshToken],
+		}
+	}
+
+	client := oauth2.NewClient(ctx, conf.TokenSource(ctx, token))
+
 	s.DropboxConfig = &dropbox.Config{
-		Token:           token,
-		LogLevel:        dropbox.LogOff, // dropbox.LogInfo,
-		Logger:          nil,
-		AsMemberID:      "",
-		Domain:          "",
-		Client:          nil,
-		HeaderGenerator: nil,
-		URLGenerator:    nil,
+		Token:    token.AccessToken,
+		LogLevel: dropbox.LogOff,
+		Client:   client,
+	}
+	return nil
+}
+
+type DropboxKeys int
+
+const (
+	DropboxClientID     DropboxKeys = 1
+	DropboxClientSecret DropboxKeys = 2
+	DropboxAccessToken  DropboxKeys = 3
+	DropboxRefreshToken DropboxKeys = 4
+)
+
+var DropboxKeyTypes = []DropboxKeys{
+	DropboxClientID,
+	DropboxClientSecret,
+	DropboxAccessToken,
+	DropboxRefreshToken,
+}
+
+func tokenFilepath(key DropboxKeys) (string, error) {
+	home, err := os.UserHomeDir()
+	if err != nil {
+		return "", fmt.Errorf("getting home dir: %w", err)
+	}
+	filePath := path.Join(home, ".config", "wildernessprime")
+	switch key {
+	case DropboxClientID:
+		filePath = path.Join(filePath, "dropbox-oauth-client-id.txt")
+	case DropboxClientSecret:
+		filePath = path.Join(filePath, "dropbox-oauth-client-secret.txt")
+	case DropboxAccessToken:
+		filePath = path.Join(filePath, "dropbox-oauth-access-token.txt")
+	case DropboxRefreshToken:
+		filePath = path.Join(filePath, "dropbox-oauth-refresh-token.txt")
+	default:
+		return "", fmt.Errorf("unknown dropbox key type: %d", key)
+	}
+	return filePath, nil
+}
+
+func readDropboxTokens() (map[DropboxKeys]string, error) {
+	tokens := map[DropboxKeys]string{}
+	for _, key := range DropboxKeyTypes {
+		filePath, err := tokenFilepath(key)
+		if err != nil {
+			return nil, fmt.Errorf("getting token filepath: %w", err)
+		}
+		fileBytes, err := os.ReadFile(filePath)
+		if err != nil {
+			if os.IsNotExist(err) {
+				continue // file doesn't exist; ignore
+			}
+			return nil, fmt.Errorf("reading token file: %w", err)
+		}
+		tokens[key] = strings.TrimSpace(string(fileBytes))
+	}
+	return tokens, nil
+}
+
+func writeDropboxTokens(tokens map[DropboxKeys]string) error {
+	for key, token := range tokens {
+		filePath, err := tokenFilepath(key)
+		if err != nil {
+			return fmt.Errorf("getting token filepath: %w", err)
+		}
+		if _, err := os.Stat(filePath); os.IsNotExist(err) {
+			// Doesn't exist; lets create it
+			err = os.MkdirAll(filepath.Dir(filePath), 0700)
+			if err != nil {
+				return fmt.Errorf("creating directory: %w", err)
+			}
+		}
+		if err := os.WriteFile(filePath, []byte(token), 0600); err != nil {
+			return fmt.Errorf("writing file: %w", err)
+		}
 	}
 	return nil
 }
 
 func (s *Service) ClearDropboxPreviewFolder() error {
+
+	if s.StorageService != DropboxStorage {
+		return nil
+	}
+
 	if !s.Global.Preview {
 		return nil
 	}
@@ -45,6 +172,10 @@ func (s *Service) ClearDropboxPreviewFolder() error {
 }
 
 func (s *Service) FindDropboxFiles() error {
+
+	if s.StorageService != DropboxStorage {
+		return nil
+	}
 
 	for _, expedition := range s.Expeditions {
 		if !expedition.Process {
@@ -235,19 +366,6 @@ func removeDropboxFiles(config *dropbox.Config, folderUrl string) error {
 	}
 
 	return nil
-}
-
-func readDropboxToken() (string, error) {
-	home, err := os.UserHomeDir()
-	if err != nil {
-		return "", fmt.Errorf("getting home dir: %w", err)
-	}
-	filePath := path.Join(home, ".config", "wildernessprime", "dropbox-oauth-access-token.txt")
-	b, err := os.ReadFile(filePath)
-	if err != nil {
-		return "", err
-	}
-	return strings.TrimSpace(string(b)), nil
 }
 
 func getDropboxPathFromSharedLink(config *dropbox.Config, sharedLink string) (string, error) {

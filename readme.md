@@ -44,10 +44,10 @@ This is the OAuth2 client secret for authenticating with YouTube.
 
 Create here: https://console.cloud.google.com/auth/clients?inv=1&invt=AbqgZQ&project=wildernessprime
 
-Refresh token `youtube-oauth2-refresh-token.json` is created automatically by the oauth login script the first time it runs.
+Refresh token `youtube-oauth2-refresh-token.json` is created automatically by the oauth login script the first time it runs (this won't work in an SSH terminal so you'll need to first run on your desktop and copy the refresh token by hand onto the server). If the Youtube API misbehaves, try deleting this file to force the oauth2 login flow to re-run.
 
-## dropbox-oauth-access-token.txt
-This is the Dropbox access token for authenticating with Dropbox. To authenticate, you need to create a Dropbox app and generate an access token:
+## dropbox-oauth-client-id.txt, dropbox-oauth-client-secret.txt
+These are needed by the Dropbox API to start the oauth2 login flow. To create them, you need to create a Dropbox app:
 
 https://www.dropbox.com/developers/apps/create
 
@@ -58,7 +58,16 @@ Add permissions:
 - files.content.read
 - sharing.read
 
-Click "Generate" under "Generated access token" to create the access token.
+Copy the two keys:
+- App key = client-id
+- App secret = client-secret
+
+When the app first runs it will prompt you to log in and copy+paste an authorization code. It will them create two more files:
+
+- dropbox-oauth-access-token.txt
+- dropbox-oauth-refresh-token.txt
+
+These are used to authenticate with the Dropbox API. If the Dropbox API misbehaves, try deleting these two files to force the oauth2 login flow to re-run.
 
 # Google service account
 
