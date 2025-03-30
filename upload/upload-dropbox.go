@@ -39,7 +39,7 @@ func (s *Service) InitDropboxService(ctx context.Context) error {
 
 	var token *oauth2.Token
 
-	if tokens[DropboxAccessToken] == "" || tokens[DropboxRefreshToken] == "" {
+	if tokens[DropboxRefreshToken] == "" {
 
 		fmt.Printf("1. Go to %v\n", conf.AuthCodeURL("state"))
 		fmt.Printf("2. Click \"Allow\" (you might have to log in first).\n")
@@ -55,14 +55,12 @@ func (s *Service) InitDropboxService(ctx context.Context) error {
 		if err != nil {
 			return fmt.Errorf("exchanging authorization code: %w", err)
 		}
-		tokens[DropboxAccessToken] = token.AccessToken
-		tokens[DropboxRefreshToken] = token.RefreshToken
+		tokens[DropboxRefreshToken] = token.AccessToken
 		if err := writeDropboxTokens(tokens); err != nil {
 			return fmt.Errorf("writing dropbox tokens: %w", err)
 		}
 	} else {
 		token = &oauth2.Token{
-			AccessToken:  tokens[DropboxAccessToken],
 			RefreshToken: tokens[DropboxRefreshToken],
 		}
 	}
@@ -82,14 +80,12 @@ type DropboxKeys int
 const (
 	DropboxClientID     DropboxKeys = 1
 	DropboxClientSecret DropboxKeys = 2
-	DropboxAccessToken  DropboxKeys = 3
-	DropboxRefreshToken DropboxKeys = 4
+	DropboxRefreshToken DropboxKeys = 3
 )
 
 var DropboxKeyTypes = []DropboxKeys{
 	DropboxClientID,
 	DropboxClientSecret,
-	DropboxAccessToken,
 	DropboxRefreshToken,
 }
 
@@ -104,8 +100,6 @@ func tokenFilepath(key DropboxKeys) (string, error) {
 		filePath = path.Join(filePath, "dropbox-oauth-client-id.txt")
 	case DropboxClientSecret:
 		filePath = path.Join(filePath, "dropbox-oauth-client-secret.txt")
-	case DropboxAccessToken:
-		filePath = path.Join(filePath, "dropbox-oauth-access-token.txt")
 	case DropboxRefreshToken:
 		filePath = path.Join(filePath, "dropbox-oauth-refresh-token.txt")
 	default:
