@@ -12,10 +12,6 @@ import (
 
 var Funcs = template.FuncMap{
 
-	"title": func(s string) string {
-		// Strings ending with 's (e.g. Tillman's pass) needs special case: 'S -> 's
-		return strings.Replace(strings.Title(strings.ToLower(s)), "'S", "'s", -1)
-	},
 	"upper": func(s string) string { return strings.ToUpper(s) },
 	"lower": func(s string) string { return strings.ToLower(s) },
 
