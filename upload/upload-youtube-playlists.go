@@ -123,9 +123,6 @@ func (s *Service) CreateOrUpdatePlaylists() error {
 		if !expedition.Process {
 			continue
 		}
-		if !expedition.Ready {
-			continue
-		}
 		if expedition.ExpeditionPlaylist {
 			if expedition.Playlist == nil {
 				// create playlist

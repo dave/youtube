@@ -154,14 +154,8 @@ func (s *Service) CreateOrUpdateVideos(ctx context.Context) error {
 		if !expedition.Process {
 			continue
 		}
-		if !expedition.Ready {
-			continue
-		}
 		for _, item := range expedition.Items {
 			if !item.Video {
-				continue
-			}
-			if !item.Ready {
 				continue
 			}
 			if item.YoutubeVideo == nil {
@@ -180,6 +174,7 @@ func (s *Service) CreateOrUpdateVideos(ctx context.Context) error {
 }
 
 func (s *Service) updateVideo(item *Item) error {
+
 	changes, err := Apply(item, item.YoutubeVideo)
 	if err != nil {
 		return fmt.Errorf("applying data (%v): %w", item.String(), err)
@@ -192,15 +187,13 @@ func (s *Service) updateVideo(item *Item) error {
 		s.StoreVideoPreview(item, "video_privacy_status", changes.PrivacyStatus.Before, changes.PrivacyStatus.After)
 		s.StoreVideoPreview(item, "video_publish_at", changes.PublishAt.Before, changes.PublishAt.After)
 	}
-	if s.Global.Production {
-		if changes.Changed {
-			fmt.Printf("Updating video (%v)\n", item.String())
-			// clear FileDetails because it's not updatable
-			item.YoutubeVideo.FileDetails = nil
-			parts := []string{"snippet", "localizations", "status"}
-			if _, err := s.YoutubeService.Videos.Update(parts, item.YoutubeVideo).Do(); err != nil {
-				return fmt.Errorf("updating video (%v): %w", item.String(), err)
-			}
+	if s.Global.Production && item.Ready && changes.Changed {
+		fmt.Printf("Updating video (%v)\n", item.String())
+		// clear FileDetails because it's not updatable
+		item.YoutubeVideo.FileDetails = nil
+		parts := []string{"snippet", "localizations", "status"}
+		if _, err := s.YoutubeService.Videos.Update(parts, item.YoutubeVideo).Do(); err != nil {
+			return fmt.Errorf("updating video (%v): %w", item.String(), err)
 		}
 	}
 
@@ -208,14 +201,6 @@ func (s *Service) updateVideo(item *Item) error {
 }
 
 func (s *Service) createVideo(ctx context.Context, item *Item) error {
-
-	res, err := s.getResume()
-	if err != nil {
-		return fmt.Errorf("getting uploader (%v): %w", item.String(), err)
-	}
-	if res.State == resume.StateUploadInProgress {
-		return fmt.Errorf("upload already in progress (%v)", item.String())
-	}
 
 	video := &youtube.Video{}
 
@@ -230,7 +215,16 @@ func (s *Service) createVideo(ctx context.Context, item *Item) error {
 		s.StoreVideoPreview(item, "video_privacy_status", "", changes.PrivacyStatus.After)
 		s.StoreVideoPreview(item, "video_publish_at", "", changes.PublishAt.After)
 	}
-	if s.Global.Production {
+	if s.Global.Production && item.Ready {
+
+		res, err := s.getResume()
+		if err != nil {
+			return fmt.Errorf("getting uploader (%v): %w", item.String(), err)
+		}
+		if res.State == resume.StateUploadInProgress {
+			return fmt.Errorf("upload already in progress (%v)", item.String())
+		}
+
 		fmt.Printf("Uploading video (%s)\n", item.String())
 		progress := func(start int64) {
 			fmt.Printf(" - uploaded %d of %d bytes (%.2f%%)\n", start, res.ContentLength, float64(start)/float64(res.ContentLength)*100)

@@ -26,17 +26,11 @@ func (s *Service) UpdateThumbnails() error {
 		if !expedition.Process {
 			continue
 		}
-		if !expedition.Ready {
-			continue
-		}
 		if !expedition.Thumbnails {
 			continue
 		}
 		for _, item := range expedition.Items {
 			if !item.Video {
-				continue
-			}
-			if !item.Ready {
 				continue
 			}
 			if item.YoutubeVideo == nil && !s.Global.Preview {
@@ -116,7 +110,7 @@ func updateThumbnail(s *Service, item *Item) error {
 			}
 		}
 	}
-	if s.Global.Production {
+	if s.Global.Production && item.Ready {
 		if item.YoutubeVideo == nil {
 			return fmt.Errorf("item has no youtube video (%v)", item.String())
 		}

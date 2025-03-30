@@ -178,9 +178,6 @@ func (s *Service) FindDropboxFiles() error {
 		if !expedition.Process {
 			continue
 		}
-		if !expedition.Ready {
-			continue
-		}
 
 		var gotFiles bool
 		var videoFiles, thumbnailFiles map[string]*files.FileMetadata

@@ -274,7 +274,6 @@ func (s *Service) ParseExpeditions() error {
 			RowId:              data["row_id"].Int(),
 			Ref:                ref,
 			Name:               data["name"].String(),
-			Ready:              data["ready"].Bool(),
 			Process:            data["process"].Bool(),
 			Thumbnails:         data["thumbnails"].Bool(),
 			VideosFolder:       data["videos_folder"].String(),

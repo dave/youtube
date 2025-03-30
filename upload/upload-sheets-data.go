@@ -42,7 +42,6 @@ type Expedition struct {
 	RowId              int
 	Ref                string
 	Name               string
-	Ready              bool
 	Process            bool
 	Thumbnails         bool
 	VideosFolder       string

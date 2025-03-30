@@ -51,9 +51,6 @@ func (s *Service) FindGoogleDriveFiles() error {
 		if !expedition.Process {
 			continue
 		}
-		if !expedition.Ready {
-			continue
-		}
 
 		var gotFiles bool
 		var videoFiles, thumbnailFiles map[string]*drive.File
