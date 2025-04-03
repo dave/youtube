@@ -59,10 +59,7 @@ func (s *Service) FindGoogleDriveFiles() error {
 			if !item.Video {
 				continue // ignore all items which don't have a video
 			}
-			if !item.Ready {
-				continue // ignore all items which aren't ready
-			}
-			needVideo := item.YoutubeVideo == nil && s.Global.Production
+			needVideo := item.YoutubeVideo == nil && s.Global.Production && item.Ready
 			needThumbnail := expedition.Thumbnails
 
 			if !needVideo && !needThumbnail {
