@@ -25,7 +25,7 @@ type Sheet struct {
 
 func (s *Sheet) FullName() string {
 	if s.Expedition != nil {
-		return s.Expedition.Ref + " - " + s.Name
+		return s.Expedition.Ref + "_" + s.Name
 	} else {
 		return s.Name
 	}
@@ -57,6 +57,7 @@ type Expedition struct {
 	Templates          *template.Template
 	PlaylistId         string
 	Playlist           *youtube.Playlist
+	ItemSheet          *Sheet
 }
 
 type Section struct {
@@ -89,6 +90,7 @@ type Item struct {
 	ThumbnailDropbox     *files.FileMetadata
 	YoutubeId            string
 	YoutubeVideo         *youtube.Video
+	YoutubeTranscript    string
 }
 
 type Location struct {

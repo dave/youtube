@@ -140,12 +140,20 @@ func (s *Service) Start(ctx context.Context) error {
 			return fmt.Errorf("unable to parse videos metadata: %w", err)
 		}
 
+		if err := s.GetVideosCaptions(); err != nil {
+			return fmt.Errorf("unable to get captions: %w", err)
+		}
+
 		if err := s.GetPlaylistsData(); err != nil {
 			return fmt.Errorf("unable to get playlists: %w", err)
 		}
 
 		if err := s.ParsePlaylistsMetaData(); err != nil {
 			return fmt.Errorf("unable to parse playlists metadata: %w", err)
+		}
+
+		if err := s.WriteSheetItemUpdates(); err != nil {
+			return fmt.Errorf("unable to write videos preview: %w", err)
 		}
 	}
 

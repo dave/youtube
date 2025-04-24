@@ -1,10 +1,13 @@
 package upload
 
 import (
+	"bytes"
 	"context"
 	"encoding/base64"
 	"encoding/json"
+	"encoding/xml"
 	"fmt"
+	"io"
 	"regexp"
 	"strings"
 	"time"
@@ -15,14 +18,126 @@ import (
 
 var MetaRegex = regexp.MustCompile(`\n{(.*)}$`)
 
+/*
+Attached is a CSV about the first few days of a 5 month hike in Nepal. Each day has a Youtube video, vlog style. Included are the start and end locations, elevations and the transcript of the Youtube video. I'd like you to propose for each item, three things:
+
+title: The Youtube video title... use best practises (e.g. optimal length 70 characters) to make this as compatible with the Youtube algorithm as possible in order to attract more videos. Please ensure this doesn't exceed 100 characters.
+
+thumnbnail: A shorter string to be used on the thumbnail video... up to 30 characters max. Again, use best practises to make this attract more viewers.
+
+description: A description of the video for the Youtube description. This can be longer - up to a paragraph.
+
+Please don't mention the day number, or the start / end locations in the text (I can add that).
+*/
+
+func (s *Service) GetVideosCaptions() error {
+	var downloaded int
+	for _, expedition := range s.Expeditions {
+		if !expedition.Process {
+			continue
+		}
+		for _, item := range expedition.Items {
+			if item.YoutubeVideo == nil {
+				continue
+			}
+			if item.YoutubeTranscript != "" {
+				continue
+			}
+			if downloaded >= 20 {
+				fmt.Println("Downloaded 20 captions, stopping")
+				return nil
+			}
+			fmt.Println("Getting captions for", item.String())
+			captionsListResponse, err := s.YoutubeService.Captions.List([]string{"id", "snippet"}, item.YoutubeId).Do()
+			if err != nil {
+				return fmt.Errorf("youtube captions list call (%v): %w", item.String(), err)
+			}
+			if len(captionsListResponse.Items) == 0 {
+				return fmt.Errorf("no captions found (%v)", item.String())
+			}
+			var captionsId string
+			for _, caption := range captionsListResponse.Items {
+				if caption.Snippet.Language == "en" {
+					captionsId = caption.Id
+					break
+				}
+			}
+			if captionsId == "" {
+				//return fmt.Errorf("no english captions found (%v)", item.String())
+				fmt.Printf("Could not find english captions (%v), using %s instead.\n", item.String(), captionsListResponse.Items[0].Snippet.Language)
+				captionsId = captionsListResponse.Items[0].Id
+			}
+			captionsDownloadResponse, err := s.YoutubeService.Captions.Download(captionsId).Tfmt("ttml").Download()
+			if err != nil {
+				return fmt.Errorf("youtube captions download call (%v): %w", item.String(), err)
+			}
+			b, err := io.ReadAll(captionsDownloadResponse.Body)
+			if err != nil {
+				return fmt.Errorf("reading captions download response (%v): %w", item.String(), err)
+			}
+			elements, err := extractPElements(b)
+			if err != nil {
+				return fmt.Errorf("extracting P elements (%v): %w", item.String(), err)
+			}
+			var out string
+			for _, element := range elements {
+				if element == "[Music]" {
+					continue
+				}
+				out += " " + element
+			}
+			out = strings.TrimSpace(out)
+			if out == "" {
+				out = "[None]"
+			}
+			item.YoutubeTranscript = out
+			downloaded++
+		}
+	}
+	return nil
+}
+
+type P struct {
+	XMLName xml.Name `xml:"p"`
+	Content string   `xml:",chardata"`
+}
+
+func extractPElements(body []byte) ([]string, error) {
+	decoder := xml.NewDecoder(bytes.NewReader(body))
+	var pElements []string
+	for {
+		tok, err := decoder.Token()
+		if err == io.EOF {
+			break
+		}
+		if err != nil {
+			return nil, fmt.Errorf("error decoding XML: %w", err)
+		}
+		switch se := tok.(type) {
+		case xml.StartElement:
+			if se.Name.Local == "p" {
+				var p P
+				if err := decoder.DecodeElement(&p, &se); err != nil {
+					return nil, fmt.Errorf("error decoding element: %w", err)
+				}
+				pElements = append(pElements, p.Content)
+			}
+		}
+	}
+	return pElements, nil
+}
+
 func (s *Service) GetVideosData() error {
 
 	apiPartsRead := []string{"snippet", "localizations", "status", "fileDetails"}
 
-	channelsResponse, _ := s.YoutubeService.Channels.
+	channelsResponse, err := s.YoutubeService.Channels.
 		List([]string{"contentDetails"}).
 		Id(s.ChannelId).
 		Do()
+	if err != nil {
+		return fmt.Errorf("youtube channels list call: %w", err)
+	}
 	uploadsPlaylistId := channelsResponse.Items[0].ContentDetails.RelatedPlaylists.Uploads
 
 	var done bool

@@ -49,6 +49,12 @@ func (s *Service) ClearPreviewSheet() error {
 
 func (s *Service) GetAllSheetsData() error {
 	for _, sheetData := range s.Spreadsheet.Sheets {
+		if strings.HasPrefix(sheetData.Properties.Title, "_") {
+			continue
+		}
+		if strings.HasPrefix(sheetData.Properties.Title, "Copy of") {
+			continue
+		}
 		skip := map[string]bool{
 			"global":            true,
 			"expedition":        true,
@@ -76,6 +82,9 @@ func (s *Service) GetSheetData(titles ...string) error {
 			if strings.HasPrefix(title, ref+"_") {
 				sheet.Name = strings.TrimPrefix(title, ref+"_")
 				sheet.Expedition = s.Expeditions[ref]
+				if title == ref+"_item" {
+					s.Expeditions[ref].ItemSheet = sheet
+				}
 			}
 		}
 
@@ -137,6 +146,92 @@ func (s *Service) ParseGlobal() error {
 	}
 
 	return nil
+}
+
+func (s *Service) WriteSheetItemUpdates() error {
+	for _, expedition := range s.Expeditions {
+		if !expedition.Process {
+			continue
+		}
+		for _, item := range expedition.Items {
+			if item.YoutubeVideo == nil {
+				continue
+			}
+			if !item.Data["transcript"].Empty() {
+				continue
+			}
+			if item.YoutubeTranscript == "" {
+				continue
+			}
+			// find "transcript" column in headers
+			transcriptColumnId := -1
+			for columnId, header := range expedition.ItemSheet.Headers {
+				if header == "transcript" {
+					transcriptColumnId = columnId
+				}
+			}
+			if transcriptColumnId == -1 {
+				return fmt.Errorf("transcript column not found in headers")
+			}
+			cellRange := getCellRange(transcriptColumnId+1, item.RowId)
+			fmt.Println("Updating transcript for item", item.String(), "in cell", cellRange)
+			if err := s.updateCellIfEmpty(expedition.ItemSheet.FullName(), cellRange, item.YoutubeTranscript); err != nil {
+				return fmt.Errorf("unable to update cell range %v (%v): %w", cellRange, item.String(), err)
+			}
+		}
+	}
+	return nil
+}
+
+func (s *Service) updateCellIfEmpty(sheetName, cellRange, value string) error {
+	// Read the current value of the cell
+	readRange := fmt.Sprintf("%s!%s", sheetName, cellRange)
+	resp, err := s.SheetsService.Spreadsheets.Values.Get(s.Spreadsheet.SpreadsheetId, readRange).Do()
+	if err != nil {
+		return fmt.Errorf("unable to retrieve data from sheet: %w", err)
+	}
+
+	// Check if the cell is empty
+	if len(resp.Values) == 0 || len(resp.Values[0]) == 0 || resp.Values[0][0] == "" {
+		// Update the cell with the new value
+		valueRange := &sheets.ValueRange{
+			Values: [][]interface{}{{value}},
+		}
+		_, err = s.SheetsService.Spreadsheets.Values.Update(s.Spreadsheet.SpreadsheetId, readRange, valueRange).ValueInputOption("RAW").Do()
+		if err != nil {
+			return fmt.Errorf("unable to update cell: %w", err)
+		}
+	} else {
+		return fmt.Errorf("cell not empty")
+	}
+	return nil
+}
+
+// columnIDToLetter converts a column ID to a column letter (e.g., 1 -> A, 27 -> AA).
+func columnIDToLetter(columnID int) string {
+	var columnLetter strings.Builder
+	for columnID > 0 {
+		columnID-- // Adjust columnID to be 0-indexed
+		columnLetter.WriteByte(byte('A' + columnID%26))
+		columnID /= 26
+	}
+	// Reverse the string as we constructed it backwards
+	return reverseString(columnLetter.String())
+}
+
+// reverseString reverses a string.
+func reverseString(s string) string {
+	runes := []rune(s)
+	for i, j := 0, len(runes)-1; i < j; i, j = i+1, j-1 {
+		runes[i], runes[j] = runes[j], runes[i]
+	}
+	return string(runes)
+}
+
+// getCellRange returns the cell range from a column ID and row ID.
+func getCellRange(columnID, rowID int) string {
+	columnLetter := columnIDToLetter(columnID)
+	return fmt.Sprintf("%s%d", columnLetter, rowID)
 }
 
 func (s *Service) WriteVideosPreview() error {
@@ -365,19 +460,20 @@ func (s *Service) ParseItems() error {
 			}
 
 			item := &Item{
-				RowId:      data["row_id"].Int(),
-				Expedition: expedition,
-				Type:       data["type"].String(),
-				Key:        data["key"].Int(),
-				Video:      data["video"].Bool(),
-				Ready:      data["ready"].Bool(),
-				Release:    release,
-				Data:       data,
-				Template:   data["template"].String(),
-				From:       parseLocation("from"),
-				To:         parseLocation("to"),
-				Via:        via,
-				Section:    section,
+				RowId:             data["row_id"].Int(),
+				Expedition:        expedition,
+				Type:              data["type"].String(),
+				Key:               data["key"].Int(),
+				Video:             data["video"].Bool(),
+				Ready:             data["ready"].Bool(),
+				YoutubeTranscript: data["transcript"].String(),
+				Release:           release,
+				Data:              data,
+				Template:          data["template"].String(),
+				From:              parseLocation("from"),
+				To:                parseLocation("to"),
+				Via:               via,
+				Section:           section,
 			}
 			expedition.Items = append(expedition.Items, item)
 			if section != nil {
