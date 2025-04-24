@@ -12,6 +12,15 @@ This tool uploads videos to YouTube:
 
 I use this tool to upload all videos to the [Wilderness Prime YouTube channel](https://www.youtube.com/wildernessprime).
 
+# Install and run
+
+Find `{LATEST_VERSION}` here: https://github.com/dave/youtube/tags
+
+```
+$ go install github.com/dave/youtube@{LATEST_VERSION}
+$ youtube
+```
+
 # Google Sheet containing data and templates
 
 https://docs.google.com/spreadsheets/d/1e2gK0GgWN4PxeZcazUvxtlhYGzg2lZsZEkphqu9Jplc/edit?usp=sharing
