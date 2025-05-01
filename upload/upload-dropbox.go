@@ -187,7 +187,7 @@ func (s *Service) FindDropboxFiles() error {
 				continue // ignore all items which don't have a video
 			}
 			needVideo := item.YoutubeVideo == nil && s.Global.Production && item.Ready
-			needThumbnail := expedition.Thumbnails
+			needThumbnail := s.Global.Thumbnails && expedition.HasThumbnails()
 
 			if !needVideo && !needThumbnail {
 				continue

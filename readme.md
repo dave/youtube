@@ -81,3 +81,9 @@ These are used to authenticate with the Dropbox API. If the Dropbox API misbehav
 # Google service account
 
 Share sheet and drive folder with: youtubescript@wildernessprime.iam.gserviceaccount.com
+
+### Transfer configs from server to server
+
+```
+scp -r ubuntu@SOURCE_SERVER_IP:/home/ubuntu/.config/wildernessprime ubuntu@DESTINATION_SERVER_IP:/home/ubuntu/.config
+```

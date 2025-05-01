@@ -22,15 +22,18 @@ import (
 
 func (s *Service) UpdateThumbnails() error {
 	// find all the videos which need to be updated
+	if !s.Global.Thumbnails {
+		return nil
+	}
 	for _, expedition := range s.Expeditions {
 		if !expedition.Process {
 			continue
 		}
-		if !expedition.Thumbnails {
-			continue
-		}
 		for _, item := range expedition.Items {
 			if !item.Video {
+				continue
+			}
+			if !item.DoThumbnail {
 				continue
 			}
 			if item.YoutubeVideo == nil && !s.Global.Preview {

@@ -34,6 +34,7 @@ func (s *Sheet) FullName() string {
 type Global struct {
 	Preview                  bool
 	Production               bool
+	Thumbnails               bool
 	PreviewThumbnailsFolder  string
 	PreviewThumbnailsDropbox string
 }
@@ -43,7 +44,6 @@ type Expedition struct {
 	Ref                string
 	Name               string
 	Process            bool
-	Thumbnails         bool
 	VideosFolder       string
 	ThumbnailsFolder   string
 	VideosDropbox      string
@@ -58,6 +58,15 @@ type Expedition struct {
 	PlaylistId         string
 	Playlist           *youtube.Playlist
 	ItemSheet          *Sheet
+}
+
+func (e *Expedition) HasThumbnails() bool {
+	for _, item := range e.Items {
+		if item.DoThumbnail {
+			return true
+		}
+	}
+	return false
 }
 
 type Section struct {
@@ -78,6 +87,7 @@ type Item struct {
 	Video                bool
 	Template             string
 	Ready                bool
+	DoThumbnail          bool
 	Release              time.Time
 	From, To             Location
 	Via                  []Location

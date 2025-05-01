@@ -19,15 +19,77 @@ import (
 var MetaRegex = regexp.MustCompile(`\n{(.*)}$`)
 
 /*
-Attached is a CSV about the first few days of a 5 month hike in Nepal. Each day has a Youtube video, vlog style. Included are the start and end locations, elevations and the transcript of the Youtube video. I'd like you to propose for each item, three things:
+In October 2024, Siyuan and I hiked the Kanchenjunga Circiut Trail, following the footsteps of my first journey into this region at the start of the Great Himalaya Trail back in 2019, but heading east from Ghunsa over the beautiful Sele La to the stunning Ramche.
 
-title: The Youtube video title... use best practises (e.g. optimal length 70 characters) to make this as compatible with the Youtube algorithm as possible in order to attract more videos. Please ensure this doesn't exceed 100 characters.
+Attached is a CSV about my Youtube series, which documents the adventure in a vlog style (one video per day). The CSV includes the day number and the transcript of the video. It also includes the names and elevations of the camps and points of interest. If you mention any of these names in the output, please ensure you match the spelling in the input.
 
-thumnbnail: A shorter string to be used on the thumbnail video... up to 30 characters max. Again, use best practises to make this attract more viewers.
+I'd like you to propose three things for each item:
 
-description: A description of the video for the Youtube description. This can be longer - up to a paragraph.
+* title: The Youtube video title... use best practises (e.g. optimal length 70 characters) to make this as compatible with the Youtube algorithm as possible in order to attract more views. Please ensure this doesn't exceed 100 characters.
 
-Please don't mention the day number, or the start / end locations in the text (I can add that).
+* thumnbnail: A shorter string to be used on the thumbnail image... up to 30 characters max. Again, use best practises to make this attract more viewers.
+
+* description: A description of the video for the Youtube description. This can be longer - up to a paragraph.
+
+Please don't mention the day number, or the start / end locations in the text (I can add that with a template). If you need to refer to the people in the video, use terms like "me", "I" or "we".
+
+Please return the output as a CSV with the following headers: key, title, thumbnail, description. Please keep blank rows where blank rows are included in the input data. Please use quotes so that the text is correctly escaped in CSV format. Please double-check that each item in your output corresponds exactly with one item in the input.
+
+
+*/
+
+/*
+In May 2024, Siyuan and I attempted to hike around Nanga Parbat, the 9th tallest mountain in the world, from the Rupal valley in the south to Fairy Meadows in the north. I don't want to spoil the surprises, but not everything goes to plan, and that's an understatement.
+
+Attached is a CSV about my Youtube series, which documents the adventure in a vlog style (one video per day). The CSV includes the day number and the transcript of the video.
+
+I'd like you to propose three things for each item:
+
+* title: The Youtube video title... use best practises (e.g. optimal length 70 characters) to make this as compatible with the Youtube algorithm as possible in order to attract more views. Please ensure this doesn't exceed 100 characters.
+
+* thumnbnail: A shorter string to be used on the thumbnail image... up to 30 characters max. Again, use best practises to make this attract more viewers.
+
+* description: A description of the video for the Youtube description. This can be longer - up to a paragraph.
+
+Please don't mention the day number, or the start / end locations in the text (I can add that with a template). If you need to refer to the people in the video, use terms like "me", "I" or "we".
+
+Please return the output as a CSV with the following headers: key, title, thumbnail, description. Please keep blank rows where blank rows are included in the input data. Please use quotes so that the text is correctly escaped in CSV format. Please double-check that each item in your output corresponds exactly with one item in the input.
+
+
+*/
+
+/*
+
+In January 2020 I sailed on the Icebird Yacht from Argentina to the Antarctic Peninsular for a month of ski mountaineering. Attached is a CSV about my Youtube series, which documents the adventure in a vlog style (one video per day). The CSV includes the day number and the transcript of the video.
+
+I'd like you to propose three things for each item:
+
+* title: The Youtube video title... use best practises (e.g. optimal length 70 characters) to make this as compatible with the Youtube algorithm as possible in order to attract more views. Please ensure this doesn't exceed 100 characters.
+
+* thumnbnail: A shorter string to be used on the thumbnail image... up to 30 characters max. Again, use best practises to make this attract more viewers.
+
+* description: A description of the video for the Youtube description. This can be longer - up to a paragraph.
+
+Please don't mention the day number, or the start / end locations in the text (I can add that with a template). If you need to refer to the people in the video, use terms like "me", "I" or "we".
+
+Please return the output as a CSV with the following headers: key, title, thumbnail, description. Please keep blank rows where blank rows are included in the input data. Please use quotes so that the text is correctly escaped in CSV format.
+
+*/
+
+/*
+Attached is a CSV about my Youtube series. The videos are vlog style (one per day), and the CSV includes the day number and the transcript of the video. The series documents my thru-hike of the Great Himalaya Trail (GHT). The concept of the Great Himalaya Trail is to follow the highest elevation continuous hiking route across the Himalayas. The Nepal section stretches for 1,400 km from Kanchenjunga in the east to Humla in the west. It winds through the mountains with an average elevation of 3,750 m, and up to 6,200 m, with an average daily ascent of over 1,000 m. The route includes parts of the more commercialised treks, linking them together with sections that are so remote even the locals seldom hike there.
+
+I'd like you to propose for each item, three things:
+
+* title: The Youtube video title... use best practises (e.g. optimal length 70 characters) to make this as compatible with the Youtube algorithm as possible in order to attract more views. Please ensure this doesn't exceed 100 characters.
+
+* thumnbnail: A shorter string to be used on the thumbnail image... up to 30 characters max. Again, use best practises to make this attract more viewers.
+
+* description: A description of the video for the Youtube description. This can be longer - up to a paragraph.
+
+Please don't mention the day number, or the start / end locations in the text (I can add that with a template).
+
+Please return the output as a CSV with the following headers: key, title, thumbnail, description. Please keep blank rows where blank rows are included in the input data.
 */
 
 func (s *Service) GetVideosCaptions() error {

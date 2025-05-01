@@ -113,10 +113,16 @@ func (s *Service) GetSheetData(titles ...string) error {
 				}
 				continue
 			}
+			headers := map[string]bool{}
 			rowData := map[string]Cell{}
 			ref := ""
+			headers["row_id"] = true
 			rowData["row_id"] = Cell{i + 1}
 			for _, header := range sheet.Headers {
+				if headers[header] {
+					return fmt.Errorf("duplicate header: %s", header)
+				}
+				headers[header] = true
 				rowData[header] = Cell{nil}
 			}
 			for columnIndex, cellValue := range row {
@@ -141,6 +147,7 @@ func (s *Service) ParseGlobal() error {
 	s.Global = &Global{
 		Preview:                  s.Sheets["global"].DataByRef["preview"]["value"].Bool(),
 		Production:               s.Sheets["global"].DataByRef["production"]["value"].Bool(),
+		Thumbnails:               s.Sheets["global"].DataByRef["thumbnails"]["value"].Bool(),
 		PreviewThumbnailsFolder:  s.Sheets["global"].DataByRef["preview_thumbnails_folder"]["value"].String(),
 		PreviewThumbnailsDropbox: s.Sheets["global"].DataByRef["preview_thumbnails_dropbox"]["value"].String(),
 	}
@@ -370,7 +377,6 @@ func (s *Service) ParseExpeditions() error {
 			Ref:                ref,
 			Name:               data["name"].String(),
 			Process:            data["process"].Bool(),
-			Thumbnails:         data["thumbnails"].Bool(),
 			VideosFolder:       data["videos_folder"].String(),
 			ThumbnailsFolder:   data["thumbnails_folder"].String(),
 			VideosDropbox:      data["videos_dropbox"].String(),
@@ -466,6 +472,7 @@ func (s *Service) ParseItems() error {
 				Key:               data["key"].Int(),
 				Video:             data["video"].Bool(),
 				Ready:             data["ready"].Bool(),
+				DoThumbnail:       data["do_thumbnail"].Bool(),
 				YoutubeTranscript: data["transcript"].String(),
 				Release:           release,
 				Data:              data,

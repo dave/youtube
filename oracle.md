@@ -96,14 +96,13 @@ Now you're good to go! 🚀
 
 Here’s how to install Git on Oracle Linux:
 
-### **Method 1: Install via DNF (Recommended)**
 1. **Update your system**
    ```sh
-   sudo dnf update -y
+   sudo apt update
    ```
 2. **Install Git**
    ```sh
-   sudo dnf install -y git
+   sudo apt install git -y
    ```
 3. **Verify Installation**
    ```sh
