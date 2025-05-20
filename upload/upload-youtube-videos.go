@@ -243,54 +243,6 @@ type VideoMeta struct {
 	Key        int    `json:"k"`
 }
 
-//func (s *Service) ParseVideosMetaData() error {
-//	for _, video := range s.YoutubeVideos {
-//		matches := MetaRegex.FindStringSubmatch(video.Snippet.Description)
-//
-//		//if len(matches) == 0 {
-//		//	// ignore existing videos uploaded before metadata was added
-//		//	switch video.Id {
-//		//	case "aghBgeKEsR4",
-//		//		"lbGWiVMW49c",
-//		//		"UzJZLKhTc58",
-//		//		"Y6rY1eoqASA",
-//		//		"HMxIWQIjeN8",
-//		//		"Q4ZN62I38Yc":
-//		//		continue
-//		//	}
-//		//	return fmt.Errorf("no meta data found for %s", video.Id)
-//		//}
-//
-//		metaBase64 := matches[1]
-//
-//		metaJson, err := base64.StdEncoding.DecodeString(metaBase64)
-//		if err != nil {
-//			return fmt.Errorf("decoding youtube meta data for %s: %w", video.Id, err)
-//		}
-//
-//		var meta VideoMeta
-//		if err := json.Unmarshal(metaJson, &meta); err != nil {
-//			return fmt.Errorf("unmarshaling youtube meta data for %s: %w", video.Id, err)
-//		}
-//
-//		expedition, ok := s.Expeditions[meta.Expedition]
-//		if !ok {
-//			return fmt.Errorf("expedition %s not found", meta.Expedition)
-//		}
-//		if !expedition.Process {
-//			continue
-//		}
-//		for _, item := range expedition.Items {
-//			if item.Type == meta.Type && item.Key == meta.Key {
-//				item.YoutubeVideo = video
-//				break
-//			}
-//		}
-//
-//	}
-//	return nil
-//}
-
 func (s *Service) CreateOrUpdateVideos(ctx context.Context) error {
 	// find all the videos which need to be updated
 	for _, expedition := range s.Expeditions {

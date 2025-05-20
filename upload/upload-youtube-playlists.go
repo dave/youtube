@@ -61,40 +61,6 @@ func (s *Service) GetPlaylistsData() error {
 	}
 
 	return nil
-
-	//var done bool
-	//var pageToken string
-	//var totalResults int64
-	//
-	//for !done {
-	//	playlistResponse, err := s.YoutubeService.Playlists.
-	//		List([]string{"snippet"}).
-	//		ChannelId(s.ChannelId).
-	//		MaxResults(50).
-	//		PageToken(pageToken).
-	//		Do()
-	//	if err != nil {
-	//		return fmt.Errorf("youtube playlists list call: %w", err)
-	//	}
-	//	totalResults = playlistResponse.PageInfo.TotalResults
-	//
-	//	fmt.Println("Got", len(playlistResponse.Items), "of", totalResults, "playlists")
-	//	// https://issuetracker.google.com/issues/402138565
-	//	for _, p := range playlistResponse.Items {
-	//		s.YoutubePlaylists[p.Id] = p
-	//	}
-	//
-	//	pageToken = playlistResponse.NextPageToken
-	//	if pageToken == "" {
-	//		done = true
-	//	}
-	//}
-	//
-	//if totalResults != int64(len(s.YoutubePlaylists)) {
-	//	return fmt.Errorf("only found %d playlists (should be %d)", len(s.YoutubePlaylists), totalResults)
-	//}
-	//
-	//return nil
 }
 
 type PlaylistMeta struct {
@@ -102,70 +68,6 @@ type PlaylistMeta struct {
 	Expedition string `json:"e"`
 	Section    string `json:"s"`
 }
-
-//func (s *Service) ParsePlaylistsMetaData() error {
-//	special := map[string]bool{
-//		"PLiM-TFJI81R-fbq9vC9vQo_PVuys01WJo": true, // Antarctica
-//		"PLiM-TFJI81R_X4HUrRDjwSJmK-MpqC1dW": true, // The Great Himalaya Trail
-//	}
-//	for _, playlist := range s.YoutubePlaylists {
-//		matches := MetaRegex.FindStringSubmatch(playlist.Snippet.Description)
-//
-//		if len(matches) == 0 {
-//			// ignore existing videos uploaded before metadata was added
-//			if _, ok := special[playlist.Id]; !ok {
-//				return fmt.Errorf("no meta data found for %s", playlist.Id)
-//			}
-//		}
-//
-//		var meta PlaylistMeta
-//
-//		if special[playlist.Id] {
-//			switch playlist.Id {
-//			case "PLiM-TFJI81R_X4HUrRDjwSJmK-MpqC1dW":
-//				meta = PlaylistMeta{
-//					Version:    1,
-//					Expedition: "ght",
-//				}
-//			case "PLiM-TFJI81R-fbq9vC9vQo_PVuys01WJo":
-//				meta = PlaylistMeta{
-//					Version:    1,
-//					Expedition: "ant",
-//				}
-//			}
-//		} else {
-//			metaBase64 := matches[1]
-//			metaJson, err := base64.StdEncoding.DecodeString(metaBase64)
-//			if err != nil {
-//				return fmt.Errorf("decoding playlist meta data (%v): %w", playlist.Id, err)
-//			}
-//			if err := json.Unmarshal(metaJson, &meta); err != nil {
-//				return fmt.Errorf("unmarshaling playlist meta data (%v): %w", playlist.Id, err)
-//			}
-//		}
-//
-//		expedition, ok := s.Expeditions[meta.Expedition]
-//		if !ok {
-//			return fmt.Errorf("expedition %s not found", meta.Expedition)
-//		}
-//		if !expedition.Process {
-//			continue
-//		}
-//		if meta.Section == "" {
-//			expedition.PlaylistId = playlist.Id
-//			expedition.Playlist = playlist
-//			continue
-//		}
-//		for _, section := range expedition.Sections {
-//			if section.Ref == meta.Section {
-//				section.PlaylistId = playlist.Id
-//				section.Playlist = playlist
-//				break
-//			}
-//		}
-//	}
-//	return nil
-//}
 
 func (s *Service) CreateOrUpdatePlaylists() error {
 	// find all the playlists which need to be updated
@@ -567,13 +469,6 @@ type HasPlaylist interface {
 func (e *Expedition) GetPlaylistId() string {
 	return e.PlaylistId
 }
-
-//func (e *Expedition) SetPlaylistId(service *Service, id string) error {
-//	e.PlaylistId = id
-//	if err := service.Sheets["expedition"].Set(service.SheetsService, e.RowId, "playlist_id", id, false); err != nil {
-//		return fmt.Errorf("setting playlist id for expedition %v: %w", e.Ref, err)
-//	}
-//}
 func (e *Expedition) GetPlaylist() *youtube.Playlist {
 	return e.Playlist
 }
