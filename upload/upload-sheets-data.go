@@ -12,15 +12,17 @@ import (
 
 	"github.com/dropbox/dropbox-sdk-go-unofficial/v6/dropbox/files"
 	"google.golang.org/api/drive/v3"
+	"google.golang.org/api/sheets/v4"
 	"google.golang.org/api/youtube/v3"
 )
 
 type Sheet struct {
-	Name       string
-	Expedition *Expedition
-	Headers    []string
-	Data       []map[string]Cell
-	DataByRef  map[string]map[string]Cell
+	Spreadsheet *sheets.Spreadsheet
+	Name        string
+	Expedition  *Expedition
+	Headers     []string
+	Data        []map[string]Cell
+	DataByRef   map[string]map[string]Cell
 }
 
 func (s *Sheet) FullName() string {
@@ -29,6 +31,112 @@ func (s *Sheet) FullName() string {
 	} else {
 		return s.Name
 	}
+}
+
+func (s *Sheet) Set(service *sheets.Service, rowId int, column string, value any, force bool) error {
+
+	// find column in headers
+	columnId := -1
+	for id, header := range s.Headers {
+		if header == column {
+			columnId = id
+		}
+	}
+	if columnId == -1 {
+		return fmt.Errorf("column %v not found in headers", column)
+	}
+	cellRange := getCellRange(columnId+1, rowId)
+
+	if s.FullName() == "" {
+		return fmt.Errorf("sheet has no name")
+	}
+
+	sheetRange := fmt.Sprintf("%s!%s", s.FullName(), cellRange)
+	if !force {
+		// Read the current value of the cell
+		resp, err := service.Spreadsheets.Values.Get(s.Spreadsheet.SpreadsheetId, sheetRange).Do()
+		if err != nil {
+			return fmt.Errorf("unable to retrieve data from sheet: %w", err)
+		}
+
+		// Check if the cell has contents
+		if len(resp.Values) > 0 && len(resp.Values[0]) > 0 && resp.Values[0][0] != "" {
+			return fmt.Errorf("cell %v is not empty", column)
+		}
+	}
+
+	fmt.Printf("Updating cell %v (%v) in %v\n", cellRange, column, s.FullName())
+
+	// Update the cell with the new value
+	valueRange := &sheets.ValueRange{
+		Values: [][]interface{}{{value}},
+	}
+	_, err := service.Spreadsheets.Values.Update(s.Spreadsheet.SpreadsheetId, sheetRange, valueRange).ValueInputOption("RAW").Do()
+	if err != nil {
+		return fmt.Errorf("unable to update cell: %w", err)
+	}
+
+	dataId := -1
+	for i, d := range s.Data {
+		if dd, ok := d["row_id"]; ok && dd.Int() == rowId {
+			dataId = i
+			break
+		}
+	}
+	if dataId == -1 {
+		return fmt.Errorf("item with row_id %v not found in %v", rowId, s.FullName())
+	}
+	s.Data[dataId][column] = Cell{value}
+	if ref, found := s.Data[dataId]["ref"]; found {
+		s.DataByRef[ref.String()][column] = Cell{value}
+	}
+
+	return nil
+}
+
+func (s *Sheet) Clear(service *sheets.Service, rowId int, column string) error {
+
+	// find column in headers
+	columnId := -1
+	for id, header := range s.Headers {
+		if header == column {
+			columnId = id
+		}
+	}
+	if columnId == -1 {
+		return fmt.Errorf("column %v not found in headers", column)
+	}
+	cellRange := getCellRange(columnId+1, rowId)
+
+	if s.FullName() == "" {
+		return fmt.Errorf("sheet has no name")
+	}
+
+	sheetRange := fmt.Sprintf("%s!%s", s.FullName(), cellRange)
+
+	fmt.Printf("Clearing cell %v (%v) in %v\n", cellRange, column, s.FullName())
+
+	_, err := service.Spreadsheets.Values.Clear(s.Spreadsheet.SpreadsheetId, sheetRange, &sheets.ClearValuesRequest{}).Do()
+	if err != nil {
+		return fmt.Errorf("unable to clear cell: %w", err)
+	}
+
+	dataId := -1
+	for i, d := range s.Data {
+		if dd, ok := d["row_id"]; ok && dd.Int() == rowId {
+			dataId = i
+			break
+		}
+	}
+	if dataId == -1 {
+		return fmt.Errorf("item with row_id %v not found in %v", rowId, s.FullName())
+	}
+	s.Data[dataId][column] = Cell{nil}
+	if ref, found := s.Data[dataId]["ref"]; found {
+		s.DataByRef[ref.String()][column] = Cell{nil}
+	}
+
+	return nil
 }
 
 type Global struct {
@@ -108,7 +216,7 @@ type Location struct {
 	Elevation int
 }
 
-func (item Item) Metadata() (string, error) {
+func (item *Item) Metadata() (string, error) {
 	metaData := VideoMeta{
 		Version:    1,
 		Expedition: item.Expedition.Ref,
@@ -122,7 +230,7 @@ func (item Item) Metadata() (string, error) {
 	return base64.StdEncoding.EncodeToString(metaDataBytes), nil
 }
 
-func (item Item) String() string {
+func (item *Item) String() string {
 	if item.Section != nil {
 		return fmt.Sprintf("%s, %s, %s, %d", item.Expedition.Ref, item.Type, item.Section.Ref, item.Key)
 	}

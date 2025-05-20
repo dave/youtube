@@ -24,10 +24,10 @@ type Service struct {
 	Spreadsheet          *sheets.Spreadsheet
 	Sheets               map[string]*Sheet
 	Expeditions          map[string]*Expedition
-	YoutubeVideos        map[string]*youtube.Video
-	YoutubePlaylists     map[string]*youtube.Playlist
-	VideoPreviewData     map[*Item]map[string]any
-	PlaylistPreviewData  map[HasPlaylist]map[string]any
+	//YoutubeVideos        map[string]*youtube.Video
+	YoutubePlaylists    map[string]*youtube.Playlist
+	VideoPreviewData    map[*Item]map[string]any
+	PlaylistPreviewData map[HasPlaylist]map[string]any
 }
 
 func New(channelId string) *Service {
@@ -36,7 +36,7 @@ func New(channelId string) *Service {
 	s.StorageService = DropboxStorage
 	s.Sheets = map[string]*Sheet{}
 	s.Expeditions = map[string]*Expedition{}
-	s.YoutubeVideos = map[string]*youtube.Video{}
+	//s.YoutubeVideos = map[string]*youtube.Video{}
 	s.YoutubePlaylists = map[string]*youtube.Playlist{}
 	s.VideoPreviewData = map[*Item]map[string]any{}
 	s.PlaylistPreviewData = map[HasPlaylist]map[string]any{}
@@ -136,9 +136,9 @@ func (s *Service) Start(ctx context.Context) error {
 			return fmt.Errorf("unable to get videos: %w", err)
 		}
 
-		if err := s.ParseVideosMetaData(); err != nil {
-			return fmt.Errorf("unable to parse videos metadata: %w", err)
-		}
+		//if err := s.ParseVideosMetaData(); err != nil {
+		//	return fmt.Errorf("unable to parse videos metadata: %w", err)
+		//}
 
 		if err := s.GetVideosCaptions(); err != nil {
 			return fmt.Errorf("unable to get captions: %w", err)
@@ -148,13 +148,9 @@ func (s *Service) Start(ctx context.Context) error {
 			return fmt.Errorf("unable to get playlists: %w", err)
 		}
 
-		if err := s.ParsePlaylistsMetaData(); err != nil {
-			return fmt.Errorf("unable to parse playlists metadata: %w", err)
-		}
-
-		if err := s.WriteSheetItemUpdates(); err != nil {
-			return fmt.Errorf("unable to write videos preview: %w", err)
-		}
+		//if err := s.ParsePlaylistsMetaData(); err != nil {
+		//	return fmt.Errorf("unable to parse playlists metadata: %w", err)
+		//}
 	}
 
 	// GET DATA FROM DRIVE

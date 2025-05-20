@@ -74,7 +74,9 @@ func (s *Service) GetAllSheetsData() error {
 func (s *Service) GetSheetData(titles ...string) error {
 	for _, title := range titles {
 		sheet := &Sheet{
-			DataByRef: map[string]map[string]Cell{},
+			Name:        title,
+			Spreadsheet: s.Spreadsheet,
+			DataByRef:   map[string]map[string]Cell{},
 		}
 		s.Sheets[title] = sheet
 
@@ -85,6 +87,7 @@ func (s *Service) GetSheetData(titles ...string) error {
 				if title == ref+"_item" {
 					s.Expeditions[ref].ItemSheet = sheet
 				}
+				break
 			}
 		}
 
@@ -155,62 +158,14 @@ func (s *Service) ParseGlobal() error {
 	return nil
 }
 
-func (s *Service) WriteSheetItemUpdates() error {
-	for _, expedition := range s.Expeditions {
-		if !expedition.Process {
-			continue
-		}
-		for _, item := range expedition.Items {
-			if item.YoutubeVideo == nil {
-				continue
-			}
-			if !item.Data["transcript"].Empty() {
-				continue
-			}
-			if item.YoutubeTranscript == "" {
-				continue
-			}
-			// find "transcript" column in headers
-			transcriptColumnId := -1
-			for columnId, header := range expedition.ItemSheet.Headers {
-				if header == "transcript" {
-					transcriptColumnId = columnId
-				}
-			}
-			if transcriptColumnId == -1 {
-				return fmt.Errorf("transcript column not found in headers")
-			}
-			cellRange := getCellRange(transcriptColumnId+1, item.RowId)
-			fmt.Println("Updating transcript for item", item.String(), "in cell", cellRange)
-			if err := s.updateCellIfEmpty(expedition.ItemSheet.FullName(), cellRange, item.YoutubeTranscript); err != nil {
-				return fmt.Errorf("unable to update cell range %v (%v): %w", cellRange, item.String(), err)
-			}
-		}
+func (item *Item) Set(s *Service, column string, value any, force bool) error {
+	if !force && !item.Data[column].Empty() {
+		return fmt.Errorf("cell %v is not empty, value = %#v (%v)", column, item.Data[column].Value, item.String())
 	}
-	return nil
-}
-
-func (s *Service) updateCellIfEmpty(sheetName, cellRange, value string) error {
-	// Read the current value of the cell
-	readRange := fmt.Sprintf("%s!%s", sheetName, cellRange)
-	resp, err := s.SheetsService.Spreadsheets.Values.Get(s.Spreadsheet.SpreadsheetId, readRange).Do()
-	if err != nil {
-		return fmt.Errorf("unable to retrieve data from sheet: %w", err)
+	if err := item.Expedition.ItemSheet.Set(s.SheetsService, item.RowId, column, value, force); err != nil {
+		return fmt.Errorf("unable to update cell %v (%v): %w", column, item.String(), err)
 	}
-
-	// Check if the cell is empty
-	if len(resp.Values) == 0 || len(resp.Values[0]) == 0 || resp.Values[0][0] == "" {
-		// Update the cell with the new value
-		valueRange := &sheets.ValueRange{
-			Values: [][]interface{}{{value}},
-		}
-		_, err = s.SheetsService.Spreadsheets.Values.Update(s.Spreadsheet.SpreadsheetId, readRange, valueRange).ValueInputOption("RAW").Do()
-		if err != nil {
-			return fmt.Errorf("unable to update cell: %w", err)
-		}
-	} else {
-		return fmt.Errorf("cell not empty")
-	}
+	item.Data[column] = Cell{value}
 	return nil
 }
 
@@ -383,6 +338,7 @@ func (s *Service) ParseExpeditions() error {
 			ThumbnailsDropbox:  data["thumbnails_dropbox"].String(),
 			ExpeditionPlaylist: data["expedition_playlist"].Bool(),
 			SectionPlaylists:   data["section_playlists"].Bool(),
+			PlaylistId:         data["playlist_id"].String(),
 			Data:               data,
 			SectionsByRef:      map[string]*Section{},
 			Templates:          template.New("").Funcs(Funcs),
@@ -407,6 +363,7 @@ func (s *Service) ParseSections() error {
 				RowId:      data["row_id"].Int(),
 				Ref:        ref,
 				Name:       data["name"].String(),
+				PlaylistId: data["playlist_id"].String(),
 				Data:       data,
 				Expedition: expedition,
 			}
@@ -471,6 +428,7 @@ func (s *Service) ParseItems() error {
 				Type:              data["type"].String(),
 				Key:               data["key"].Int(),
 				Video:             data["video"].Bool(),
+				YoutubeId:         data["youtube_id"].String(),
 				Ready:             data["ready"].Bool(),
 				DoThumbnail:       data["do_thumbnail"].Bool(),
 				YoutubeTranscript: data["transcript"].String(),

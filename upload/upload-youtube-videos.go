@@ -3,8 +3,6 @@ package upload
 import (
 	"bytes"
 	"context"
-	"encoding/base64"
-	"encoding/json"
 	"encoding/xml"
 	"fmt"
 	"io"
@@ -19,7 +17,7 @@ import (
 var MetaRegex = regexp.MustCompile(`\n{(.*)}$`)
 
 /*
-In October 2024, Siyuan and I hiked the Kanchenjunga Circiut Trail, following the footsteps of my first journey into this region at the start of the Great Himalaya Trail back in 2019, but heading east from Ghunsa over the beautiful Sele La to the stunning Ramche.
+In October 2024, Siyuan and I hiked the Kanchenjunga Circuit Trail, following the footsteps of my first journey into this region at the start of the Great Himalaya Trail back in 2019, but heading east from Ghunsa over the beautiful Sele La to the stunning Ramche.
 
 Attached is a CSV about my Youtube series, which documents the adventure in a vlog style (one video per day). The CSV includes the day number and the transcript of the video. It also includes the names and elevations of the camps and points of interest. If you mention any of these names in the output, please ensure you match the spelling in the input.
 
@@ -153,6 +151,9 @@ func (s *Service) GetVideosCaptions() error {
 				out = "[None]"
 			}
 			item.YoutubeTranscript = out
+			if err := item.Set(s, "transcript", out, false); err != nil {
+				return fmt.Errorf("setting transcript (%v): %w", item.String(), err)
+			}
 			downloaded++
 		}
 	}
@@ -191,79 +192,45 @@ func extractPElements(body []byte) ([]string, error) {
 
 func (s *Service) GetVideosData() error {
 
+	var videoIds []string
+	itemsMap := map[string]*Item{}
+	for _, expedition := range s.Expeditions {
+		if !expedition.Process {
+			continue
+		}
+		for _, item := range expedition.Items {
+			if item.YoutubeId != "" {
+				videoIds = append(videoIds, item.YoutubeId)
+				itemsMap[item.YoutubeId] = item
+			}
+		}
+	}
+
 	apiPartsRead := []string{"snippet", "localizations", "status", "fileDetails"}
 
-	channelsResponse, err := s.YoutubeService.Channels.
-		List([]string{"contentDetails"}).
-		Id(s.ChannelId).
-		Do()
-	if err != nil {
-		return fmt.Errorf("youtube channels list call: %w", err)
-	}
-	uploadsPlaylistId := channelsResponse.Items[0].ContentDetails.RelatedPlaylists.Uploads
+	const maxBatchSize = 50
 
-	var done bool
-	var pageToken string
-	var totalResults int64
-
-	for !done {
-		playlistResponse, err := s.YoutubeService.PlaylistItems.
-			List([]string{"snippet"}).
-			PlaylistId(uploadsPlaylistId).
-			MaxResults(50).
-			PageToken(pageToken).
-			Do()
-		if err != nil {
-			return fmt.Errorf("youtube playlistItems list call: %w", err)
-		}
-		totalResults = playlistResponse.PageInfo.TotalResults
-
-		fmt.Println("Got", len(playlistResponse.Items), "of", totalResults, "videos")
-		var ids []string
-		for _, item := range playlistResponse.Items {
-			ids = append(ids, item.Snippet.ResourceId.VideoId)
+	for i := 0; i < len(videoIds); i += maxBatchSize {
+		end := i + maxBatchSize
+		if end > len(videoIds) {
+			end = len(videoIds)
 		}
 
-		videosResponse, err := s.YoutubeService.Videos.
+		fmt.Printf("Getting data for %d of %d videos\n", end-i, len(videoIds))
+
+		response, err := s.YoutubeService.Videos.
 			List(apiPartsRead).
-			Id(strings.Join(ids, ",")).
+			Id(videoIds[i:end]...).
 			Do()
 		if err != nil {
 			return fmt.Errorf("youtube videos list call: %w", err)
 		}
-		if len(videosResponse.Items) != len(playlistResponse.Items) {
-			return fmt.Errorf("mismatch between playlistItems and videos")
+		if len(response.Items) != (end - i) {
+			return fmt.Errorf("video list response length mismatch response: %d, request: %d)", len(response.Items), end-i)
 		}
-
-		// https://issuetracker.google.com/issues/402138565
-		for _, v := range videosResponse.Items {
-			s.YoutubeVideos[v.Id] = v
+		for _, video := range response.Items {
+			itemsMap[video.Id].YoutubeVideo = video
 		}
-
-		pageToken = playlistResponse.NextPageToken
-		if pageToken == "" {
-			done = true
-		}
-	}
-
-	if _, ok := s.YoutubeVideos["POHhwrogJ8U"]; !ok {
-		// one video is always missing from results
-		// https://issuetracker.google.com/issues/402138565
-		missingVideoResponse, err := s.YoutubeService.Videos.
-			List(apiPartsRead).
-			Id("POHhwrogJ8U").
-			Do()
-		if err != nil {
-			return fmt.Errorf("youtube videos list call: %w", err)
-		}
-		if len(missingVideoResponse.Items) != 1 {
-			return fmt.Errorf("missing video not found")
-		}
-		v := missingVideoResponse.Items[0]
-		s.YoutubeVideos[v.Id] = v
-	}
-	if totalResults != int64(len(s.YoutubeVideos)) {
-		return fmt.Errorf("only found %d videos (should be %d)", len(s.YoutubeVideos), totalResults)
 	}
 
 	return nil
@@ -276,54 +243,53 @@ type VideoMeta struct {
 	Key        int    `json:"k"`
 }
 
-func (s *Service) ParseVideosMetaData() error {
-	for _, video := range s.YoutubeVideos {
-		matches := MetaRegex.FindStringSubmatch(video.Snippet.Description)
-
-		if len(matches) == 0 {
-			// ignore existing videos uploaded before metadata was added
-			switch video.Id {
-			case "aghBgeKEsR4",
-				"lbGWiVMW49c",
-				"UzJZLKhTc58",
-				"Y6rY1eoqASA",
-				"HMxIWQIjeN8",
-				"Q4ZN62I38Yc":
-				continue
-			}
-			return fmt.Errorf("no meta data found for %s", video.Id)
-		}
-
-		metaBase64 := matches[1]
-
-		metaJson, err := base64.StdEncoding.DecodeString(metaBase64)
-		if err != nil {
-			return fmt.Errorf("decoding youtube meta data for %s: %w", video.Id, err)
-		}
-
-		var meta VideoMeta
-		if err := json.Unmarshal(metaJson, &meta); err != nil {
-			return fmt.Errorf("unmarshaling youtube meta data for %s: %w", video.Id, err)
-		}
-
-		expedition, ok := s.Expeditions[meta.Expedition]
-		if !ok {
-			return fmt.Errorf("expedition %s not found", meta.Expedition)
-		}
-		if !expedition.Process {
-			continue
-		}
-		for _, item := range expedition.Items {
-			if item.Type == meta.Type && item.Key == meta.Key {
-				item.YoutubeId = video.Id
-				item.YoutubeVideo = video
-				break
-			}
-		}
-
-	}
-	return nil
-}
+//func (s *Service) ParseVideosMetaData() error {
+//	for _, video := range s.YoutubeVideos {
+//		matches := MetaRegex.FindStringSubmatch(video.Snippet.Description)
+//
+//		//if len(matches) == 0 {
+//		//	// ignore existing videos uploaded before metadata was added
+//		//	switch video.Id {
+//		//	case "aghBgeKEsR4",
+//		//		"lbGWiVMW49c",
+//		//		"UzJZLKhTc58",
+//		//		"Y6rY1eoqASA",
+//		//		"HMxIWQIjeN8",
+//		//		"Q4ZN62I38Yc":
+//		//		continue
+//		//	}
+//		//	return fmt.Errorf("no meta data found for %s", video.Id)
+//		//}
+//
+//		metaBase64 := matches[1]
+//
+//		metaJson, err := base64.StdEncoding.DecodeString(metaBase64)
+//		if err != nil {
+//			return fmt.Errorf("decoding youtube meta data for %s: %w", video.Id, err)
+//		}
+//
+//		var meta VideoMeta
+//		if err := json.Unmarshal(metaJson, &meta); err != nil {
+//			return fmt.Errorf("unmarshaling youtube meta data for %s: %w", video.Id, err)
+//		}
+//
+//		expedition, ok := s.Expeditions[meta.Expedition]
+//		if !ok {
+//			return fmt.Errorf("expedition %s not found", meta.Expedition)
+//		}
+//		if !expedition.Process {
+//			continue
+//		}
+//		for _, item := range expedition.Items {
+//			if item.Type == meta.Type && item.Key == meta.Key {
+//				item.YoutubeVideo = video
+//				break
+//			}
+//		}
+//
+//	}
+//	return nil
+//}
 
 func (s *Service) CreateOrUpdateVideos(ctx context.Context) error {
 	// find all the videos which need to be updated
@@ -421,6 +387,9 @@ func (s *Service) createVideo(ctx context.Context, item *Item) error {
 			return fmt.Errorf("uploading video (%v): %w", item.String(), err)
 		}
 
+		if err := item.Set(s, "youtube_id", insertedVideo.Id, false); err != nil {
+			return fmt.Errorf("setting youtube_id (%v): %w", item.String(), err)
+		}
 		item.YoutubeVideo = insertedVideo
 		item.YoutubeId = insertedVideo.Id
 
