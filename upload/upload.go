@@ -115,13 +115,6 @@ func (s *Service) Start(ctx context.Context) error {
 		}
 	}
 
-	// GENERATE AI TITLES
-	{
-		if err := s.GenerateAiTitles(ctx); err != nil {
-			return fmt.Errorf("generating ai titles: %w", err)
-		}
-	}
-
 	// CLEAR PREVIEW SHEET AND FOLDER
 	{
 		if err := s.ClearPreviewSheets(); err != nil {
@@ -132,6 +125,13 @@ func (s *Service) Start(ctx context.Context) error {
 		}
 		if err := s.ClearDropboxPreviewFolder(); err != nil {
 			return fmt.Errorf("unable to clear dropbox preview folder: %w", err)
+		}
+	}
+
+	// GENERATE AI TITLES
+	{
+		if err := s.GenerateAiTitles(ctx); err != nil {
+			return fmt.Errorf("generating ai titles: %w", err)
 		}
 	}
 

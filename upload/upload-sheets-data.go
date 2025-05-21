@@ -146,6 +146,7 @@ type Global struct {
 	Titles                   bool
 	PreviewThumbnailsFolder  string
 	PreviewThumbnailsDropbox string
+	Data                     map[string]Cell
 }
 
 type Expedition struct {

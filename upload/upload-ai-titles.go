@@ -93,29 +93,7 @@ func (s *Service) GenerateAiTitles(ctx context.Context) error {
 			},
 		}
 
-		query := `
-Below is data about my Youtube series, which documents an outdoors adventure in a vlog style (one video per day). The json includes:
-
-Name        // the name of the expedition
-Description // a description of the expedition
-
-For each video in the series, we have:
-
-Type, Section, Key // Internal data to reference the episode, ignore this but copy to the output data. 
-Landmarks          // The correct spelling for important landmarks, please use these spellings if you reference them (not the spelling from the transcript)
-Transcript         // The transcript of the Youtube video
-
-I'd like you to propose three things for each item:
-
-* title: The Youtube video title... use best practises (e.g. optimal length 70 characters) to make this as compatible with the Youtube algorithm as possible in order to attract more views. Please ensure this doesn't exceed 100 characters.
-
-* thumnbnail: A shorter string to be used on the thumbnail image... up to 30 characters max. Again, use best practises to make this attract more viewers.
-
-* description: A description of the video for the Youtube description. This can be longer - up to a paragraph.
-
-Please don't mention the day number, or the start / end locations in the title / thumbnail (I can add that with a template). If you need to refer to the people in the video, use terms like "me", "I" or "we".
-
-Please keep blank rows where blank rows are included in the input data. Please double-check that each item in your output corresponds exactly with one item in the input. 
+		query := s.Global.Data["ai_prompt"].String() + `
 
 I'll be expecting the response to be in the correct format, so please double check the response matches this: 
 

@@ -29,28 +29,31 @@ func (s *Service) InitSheetsService() error {
 }
 
 func (s *Service) ClearPreviewSheets() error {
-	if !s.Global.Preview {
-		return nil
+	if s.Global.Preview {
+		fmt.Println("Clearing preview sheet")
+
+		// clear "preview_videos", "preview_titles" sheet, but leave first row (headers)
+		_, err := s.SheetsService.Spreadsheets.Values.Clear(
+			SPREADSHEET_ID,
+			fmt.Sprintf("%s!2:1000", "preview_videos"),
+			&sheets.ClearValuesRequest{},
+		).Do()
+		if err != nil {
+			return fmt.Errorf("unable to clear preview_videos sheet data: %w", err)
+		}
 	}
 
-	fmt.Println("Clearing preview sheets")
+	if s.Global.Titles {
+		fmt.Println("Clearing preview titles sheet")
 
-	// clear "preview_videos", "preview_titles" sheet, but leave first row (headers)
-	_, err := s.SheetsService.Spreadsheets.Values.Clear(
-		SPREADSHEET_ID,
-		fmt.Sprintf("%s!2:1000", "preview_videos"),
-		&sheets.ClearValuesRequest{},
-	).Do()
-	if err != nil {
-		return fmt.Errorf("unable to clear preview_videos sheet data: %w", err)
-	}
-	_, err = s.SheetsService.Spreadsheets.Values.Clear(
-		SPREADSHEET_ID,
-		fmt.Sprintf("%s!2:1000", "preview_titles"),
-		&sheets.ClearValuesRequest{},
-	).Do()
-	if err != nil {
-		return fmt.Errorf("unable to clear preview_titles sheet data: %w", err)
+		_, err := s.SheetsService.Spreadsheets.Values.Clear(
+			SPREADSHEET_ID,
+			fmt.Sprintf("%s!2:1000", "preview_titles"),
+			&sheets.ClearValuesRequest{},
+		).Do()
+		if err != nil {
+			return fmt.Errorf("unable to clear preview_titles sheet data: %w", err)
+		}
 	}
 	return nil
 }
@@ -162,7 +165,13 @@ func (s *Service) ParseGlobal() error {
 		Titles:                   s.Sheets["global"].DataByRef["titles"]["value"].Bool(),
 		PreviewThumbnailsFolder:  s.Sheets["global"].DataByRef["preview_thumbnails_folder"]["value"].String(),
 		PreviewThumbnailsDropbox: s.Sheets["global"].DataByRef["preview_thumbnails_dropbox"]["value"].String(),
+		//	Data:
 	}
+	data := map[string]Cell{}
+	for name, row := range s.Sheets["global"].DataByRef {
+		data[name] = row["value"]
+	}
+	s.Global.Data = data
 
 	return nil
 }
