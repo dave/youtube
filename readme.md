@@ -55,6 +55,11 @@ Create here: https://console.cloud.google.com/auth/clients?inv=1&invt=AbqgZQ&pro
 
 Refresh token `youtube-oauth2-refresh-token.json` is created automatically by the oauth login script the first time it runs (this won't work in an SSH terminal so you'll need to first run on your desktop and copy the refresh token by hand onto the server). If the Youtube API misbehaves, try deleting this file to force the oauth2 login flow to re-run.
 
+## gemini-api.key
+This is for the Google Gemini API, used for generating titles / descriptions using AI.
+
+Get it here: https://aistudio.google.com/app/apikey
+
 ## dropbox-oauth-client-id.txt, dropbox-oauth-client-secret.txt
 These are needed by the Dropbox API to start the oauth2 login flow. To create them, you need to create a Dropbox app:
 

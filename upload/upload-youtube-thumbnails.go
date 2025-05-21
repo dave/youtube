@@ -91,8 +91,6 @@ func updateThumbnail(s *Service, item *Item) error {
 	}
 
 	if s.Global.Preview {
-		s.StoreVideoPreview(item, "thumbnail_top", "", textTopBuffer.String())
-		s.StoreVideoPreview(item, "thumbnail_bottom", "", textBottomBuffer.String())
 		switch s.StorageService {
 		case GoogleDriveStorage:
 			fileMetadata := &drive.File{

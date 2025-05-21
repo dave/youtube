@@ -115,9 +115,16 @@ func (s *Service) Start(ctx context.Context) error {
 		}
 	}
 
+	// GENERATE AI TITLES
+	{
+		if err := s.GenerateAiTitles(ctx); err != nil {
+			return fmt.Errorf("generating ai titles: %w", err)
+		}
+	}
+
 	// CLEAR PREVIEW SHEET AND FOLDER
 	{
-		if err := s.ClearPreviewSheet(); err != nil {
+		if err := s.ClearPreviewSheets(); err != nil {
 			return fmt.Errorf("unable to clear preview sheet: %w", err)
 		}
 		if err := s.ClearGoogleDrivePreviewFolder(); err != nil {

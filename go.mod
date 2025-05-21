@@ -12,6 +12,7 @@ require (
 )
 
 require (
+	cloud.google.com/go v0.116.0 // indirect
 	cloud.google.com/go/auth v0.14.1 // indirect
 	cloud.google.com/go/auth/oauth2adapt v0.2.7 // indirect
 	cloud.google.com/go/compute/metadata v0.6.0 // indirect
@@ -22,10 +23,12 @@ require (
 	github.com/felixge/httpsnoop v1.0.4 // indirect
 	github.com/go-logr/logr v1.4.2 // indirect
 	github.com/go-logr/stdr v1.2.2 // indirect
+	github.com/google/go-cmp v0.6.0 // indirect
 	github.com/google/s2a-go v0.1.9 // indirect
 	github.com/google/uuid v1.6.0 // indirect
 	github.com/googleapis/enterprise-certificate-proxy v0.3.4 // indirect
 	github.com/googleapis/gax-go/v2 v2.14.1 // indirect
+	github.com/gorilla/websocket v1.5.3 // indirect
 	github.com/klauspost/cpuid/v2 v2.2.10 // indirect
 	github.com/libdns/libdns v0.2.3 // indirect
 	github.com/mholt/acmez/v3 v3.1.0 // indirect
@@ -48,6 +51,7 @@ require (
 	golang.org/x/sys v0.31.0 // indirect
 	golang.org/x/text v0.23.0 // indirect
 	golang.org/x/tools v0.31.0 // indirect
+	google.golang.org/genai v1.6.0 // indirect
 	google.golang.org/genproto/googleapis/rpc v0.0.0-20250207221924-e9438ea467c6 // indirect
 	google.golang.org/grpc v1.70.0 // indirect
 	google.golang.org/protobuf v1.36.5 // indirect

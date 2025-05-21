@@ -143,6 +143,7 @@ type Global struct {
 	Preview                  bool
 	Production               bool
 	Thumbnails               bool
+	Titles                   bool
 	PreviewThumbnailsFolder  string
 	PreviewThumbnailsDropbox string
 }
@@ -200,6 +201,7 @@ type Item struct {
 	From, To             Location
 	Via                  []Location
 	Section              *Section
+	SectionRef           string
 	Expedition           *Expedition
 	Data                 map[string]Cell
 	VideoGoogleDrive     *drive.File

@@ -28,14 +28,14 @@ func (s *Service) InitSheetsService() error {
 	return nil
 }
 
-func (s *Service) ClearPreviewSheet() error {
+func (s *Service) ClearPreviewSheets() error {
 	if !s.Global.Preview {
 		return nil
 	}
 
-	fmt.Println("Clearing preview sheet")
+	fmt.Println("Clearing preview sheets")
 
-	// clear "preview_videos" sheet, but leave first row (headers)
+	// clear "preview_videos", "preview_titles" sheet, but leave first row (headers)
 	_, err := s.SheetsService.Spreadsheets.Values.Clear(
 		SPREADSHEET_ID,
 		fmt.Sprintf("%s!2:1000", "preview_videos"),
@@ -43,6 +43,14 @@ func (s *Service) ClearPreviewSheet() error {
 	).Do()
 	if err != nil {
 		return fmt.Errorf("unable to clear preview_videos sheet data: %w", err)
+	}
+	_, err = s.SheetsService.Spreadsheets.Values.Clear(
+		SPREADSHEET_ID,
+		fmt.Sprintf("%s!2:1000", "preview_titles"),
+		&sheets.ClearValuesRequest{},
+	).Do()
+	if err != nil {
+		return fmt.Errorf("unable to clear preview_titles sheet data: %w", err)
 	}
 	return nil
 }
@@ -151,6 +159,7 @@ func (s *Service) ParseGlobal() error {
 		Preview:                  s.Sheets["global"].DataByRef["preview"]["value"].Bool(),
 		Production:               s.Sheets["global"].DataByRef["production"]["value"].Bool(),
 		Thumbnails:               s.Sheets["global"].DataByRef["thumbnails"]["value"].Bool(),
+		Titles:                   s.Sheets["global"].DataByRef["titles"]["value"].Bool(),
 		PreviewThumbnailsFolder:  s.Sheets["global"].DataByRef["preview_thumbnails_folder"]["value"].String(),
 		PreviewThumbnailsDropbox: s.Sheets["global"].DataByRef["preview_thumbnails_dropbox"]["value"].String(),
 	}
@@ -203,8 +212,8 @@ func (s *Service) WriteVideosPreview() error {
 	}
 
 	// write preview data
-	// expedition	type	key	changed	video_privacy_status	video_publish_at	video_title	video_description	thumbnail_top	thumbnail_bottom
-	headers := []string{"video_privacy_status", "video_publish_at", "video_title", "video_description", "thumbnail_top", "thumbnail_bottom"}
+	// expedition	type	key	changed	video_privacy_status	video_publish_at	video_title	video_description
+	headers := []string{"video_privacy_status", "video_publish_at", "video_title", "video_description"}
 	var values [][]any
 
 	var keys []*Item
@@ -439,6 +448,7 @@ func (s *Service) ParseItems() error {
 				To:                parseLocation("to"),
 				Via:               via,
 				Section:           section,
+				SectionRef:        sectionRef,
 			}
 			expedition.Items = append(expedition.Items, item)
 			if section != nil {
