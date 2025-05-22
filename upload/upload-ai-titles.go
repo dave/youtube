@@ -28,9 +28,12 @@ func (s *Service) GenerateAiTitles(ctx context.Context) error {
 		}
 		for _, item := range expedition.Items {
 			geminiItem := GeminiRequestItem{
-				Type:    item.Type,
-				Section: item.SectionRef,
-				Key:     item.Key,
+				Type:        item.Type,
+				Section:     item.SectionRef,
+				Key:         item.Key,
+				Title:       item.Data["title"].String(),
+				Thumbnail:   item.Data["thumbnail"].String(),
+				Description: item.Data["description"].String(),
 			}
 			if item.YoutubeTranscript != "" && item.YoutubeTranscript != "[None]" {
 				var landmarks []string
@@ -178,11 +181,14 @@ type GeminiRequest struct {
 }
 
 type GeminiRequestItem struct {
-	Type       string `json:"type"`
-	Section    string `json:"section"`
-	Key        int    `json:"key"`
-	Landmarks  string `json:"landmarks"`
-	Transcript string `json:"transcript"`
+	Type        string `json:"type"`
+	Section     string `json:"section"`
+	Key         int    `json:"key"`
+	Title       string `json:"title"`
+	Description string `json:"description"`
+	Thumbnail   string `json:"thumbnail"`
+	Landmarks   string `json:"landmarks"`
+	Transcript  string `json:"transcript"`
 }
 
 type GeminiResponseItem struct {
