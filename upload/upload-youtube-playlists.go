@@ -400,8 +400,7 @@ func (s *Service) createPlaylist(parent HasPlaylist) error {
 			parent.PlaylistId = newPlaylist.Id
 			parent.Playlist = newPlaylist
 		case *Section:
-			sheetName := fmt.Sprintf("%v_section", parent.Expedition.Ref)
-			if err := s.Sheets[sheetName].Set(s.SheetsService, parent.RowId, "playlist_id", newPlaylist.Id, false); err != nil {
+			if err := parent.Expedition.Sheets["section"].Set(s.SheetsService, parent.RowId, "playlist_id", newPlaylist.Id, false); err != nil {
 				return fmt.Errorf("setting playlist_id for section %v: %w", parent.Ref, err)
 			}
 			parent.PlaylistId = newPlaylist.Id
@@ -446,8 +445,7 @@ func (s *Service) deletePlaylist(parent HasPlaylist) error {
 			parent.PlaylistId = ""
 			parent.Playlist = nil
 		case *Section:
-			sheetName := fmt.Sprintf("%v_section", parent.Expedition.Ref)
-			if err := s.Sheets[sheetName].Clear(s.SheetsService, parent.RowId, "playlist_id"); err != nil {
+			if err := parent.Expedition.Sheets["section"].Clear(s.SheetsService, parent.RowId, "playlist_id"); err != nil {
 				return fmt.Errorf("clearing playlist_id for section %v: %w", parent.Ref, err)
 			}
 			parent.PlaylistId = ""

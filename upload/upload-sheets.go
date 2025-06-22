@@ -1,6 +1,7 @@
 package upload
 
 import (
+	"errors"
 	"fmt"
 	"sort"
 	"strings"
@@ -75,40 +76,64 @@ func (s *Service) GetAllSheetsData() error {
 		if skip[sheetData.Properties.Title] {
 			continue
 		}
-		if err := s.GetSheetData(sheetData.Properties.Title); err != nil {
+		if err := s.GetSheetData(nil, sheetData.Properties.Title); err != nil {
 			return fmt.Errorf("unable to get sheet data (%v): %w", sheetData.Properties.Title, err)
+		}
+	}
+	for _, expedition := range s.Expeditions {
+		if !expedition.Process {
+			continue
+		}
+		if err := s.GetSheets(expedition); err != nil {
+			return fmt.Errorf("unable to get expedition sheets: %w", err)
 		}
 	}
 	return nil
 }
 
-func (s *Service) GetSheetData(titles ...string) error {
+func (s *Service) GetSheets(expedition *Expedition) error {
+	spreadsheet, err := s.SheetsService.Spreadsheets.Get(expedition.DataSheetId).Do()
+	if err != nil {
+		return fmt.Errorf("unable to retrieve spreadsheets: %w", err)
+	}
+	expedition.Spreadsheet = spreadsheet
+
+	for _, sheet := range expedition.Spreadsheet.Sheets {
+		if err := s.GetSheetData(expedition, sheet.Properties.Title); err != nil {
+			return fmt.Errorf("unable to get sheet data (%v): %w", sheet.Properties.Title, err)
+		}
+	}
+
+	return nil
+}
+
+func (s *Service) GetSheetData(expedition *Expedition, titles ...string) error {
 	for _, title := range titles {
 		sheet := &Sheet{
-			Name:        title,
-			Spreadsheet: s.Spreadsheet,
-			DataByRef:   map[string]map[string]Cell{},
+			DataByRef: map[string]map[string]Cell{},
 		}
-		s.Sheets[title] = sheet
-
-		for ref := range s.Expeditions {
-			if strings.HasPrefix(title, ref+"_") {
-				sheet.Name = strings.TrimPrefix(title, ref+"_")
-				sheet.Expedition = s.Expeditions[ref]
-				if title == ref+"_item" {
-					s.Expeditions[ref].ItemSheet = sheet
-				}
-				break
+		if expedition != nil {
+			sheet.Name = strings.TrimPrefix(title, expedition.Ref+"_")
+			sheet.Expedition = expedition
+			sheet.Spreadsheet = expedition.Spreadsheet
+			expedition.Sheets[sheet.Name] = sheet
+			if sheet.Name == "item" {
+				expedition.ItemSheet = sheet
 			}
+		} else {
+			sheet.Name = title
+			sheet.Spreadsheet = s.Spreadsheet
+			s.Sheets[sheet.Name] = sheet
 		}
 
-		if sheet.Expedition != nil && !sheet.Expedition.Process {
-			return nil
+		if expedition != nil {
+			fmt.Printf("Getting raw data for sheet %s (%s)\n", title, expedition.Ref)
+		} else {
+			fmt.Printf("Getting raw data for sheet %s\n", title)
 		}
 
-		fmt.Println("Getting raw data for sheet", title)
 		values, err := s.SheetsService.Spreadsheets.Values.
-			Get(SPREADSHEET_ID, title).
+			Get(sheet.Spreadsheet.SpreadsheetId, title).
 			ValueRenderOption("UNFORMATTED_VALUE").
 			Do()
 		if err != nil {
@@ -345,6 +370,12 @@ func (s *Service) WritePlaylistsPreview() error {
 func (s *Service) ParseExpeditions() error {
 	for _, data := range s.Sheets["expedition"].Data {
 		ref := data["ref"].String()
+
+		sheetId, err := getSpreadsheetIDFromLink(data["data_sheet"].String())
+		if err != nil {
+			return fmt.Errorf("unable to get sheet id: %w", err)
+		}
+
 		s.Expeditions[ref] = &Expedition{
 			RowId:              data["row_id"].Int(),
 			Ref:                ref,
@@ -356,8 +387,10 @@ func (s *Service) ParseExpeditions() error {
 			ThumbnailsDropbox:  data["thumbnails_dropbox"].String(),
 			ExpeditionPlaylist: data["expedition_playlist"].Bool(),
 			SectionPlaylists:   data["section_playlists"].Bool(),
+			DataSheetId:        sheetId,
 			PlaylistId:         data["playlist_id"].String(),
 			Data:               data,
+			Sheets:             map[string]*Sheet{},
 			SectionsByRef:      map[string]*Section{},
 			Templates:          template.New("").Funcs(Funcs),
 		}
@@ -365,12 +398,28 @@ func (s *Service) ParseExpeditions() error {
 	return nil
 }
 
+func getSpreadsheetIDFromLink(link string) (string, error) {
+	if link == "" {
+		return "", errors.New("link is empty")
+	}
+
+	// Example link: https://docs.google.com/spreadsheets/d/<spreadsheet_id>/edit
+	parts := strings.Split(link, "/")
+	for i, part := range parts {
+		if part == "d" && i+1 < len(parts) {
+			return parts[i+1], nil
+		}
+	}
+
+	return "", errors.New("invalid Google Sheets link")
+}
+
 func (s *Service) ParseSections() error {
 	for _, expedition := range s.Expeditions {
 		if !expedition.Process {
 			continue
 		}
-		sheet, ok := s.Sheets[expedition.Ref+"_section"]
+		sheet, ok := expedition.Sheets["section"]
 		if !ok {
 			continue
 		}
@@ -396,12 +445,8 @@ func (s *Service) ParseItems() error {
 		if !expedition.Process {
 			continue
 		}
-		sheet, ok := s.Sheets[expedition.Ref+"_item"]
-		if !ok {
-			continue
-		}
 
-		for _, data := range sheet.Data {
+		for _, data := range expedition.ItemSheet.Data {
 
 			parseLocation := func(s string) Location {
 				if data[s+"_name"].Empty() {
@@ -473,7 +518,7 @@ func (s *Service) ParseTemplates() error {
 		if !expedition.Process {
 			continue
 		}
-		sheet, ok := s.Sheets[expedition.Ref+"_template"]
+		sheet, ok := expedition.Sheets["template"]
 		if !ok {
 			continue
 		}
@@ -504,36 +549,36 @@ func (s *Service) ParseTemplates() error {
 }
 
 func (s *Service) ParseLinkedData() error {
-	for _, sheet := range s.Sheets {
-		for _, header := range sheet.Headers {
-			if strings.HasSuffix(header, "_ref") {
-				linkedSheetName := strings.TrimSuffix(header, "_ref")
+	for _, expedition := range s.Expeditions {
+		for _, sheet := range expedition.Sheets {
+			for _, header := range sheet.Headers {
+				if strings.HasSuffix(header, "_ref") {
+					linkedSheetName := strings.TrimSuffix(header, "_ref")
 
-				// first check if the expedition specific linked sheet exists
-				linkedSheet, ok := s.Sheets[sheet.Expedition.Ref+"_"+linkedSheetName]
-				if !ok {
-					// if not, check if a general linked sheet exists
-					linkedSheet, ok = s.Sheets[linkedSheetName]
+					// first check if the expedition specific linked sheet exists
+					linkedSheet, ok := expedition.Sheets[linkedSheetName]
 					if !ok {
-						return fmt.Errorf("linked sheet not found: %s", linkedSheetName)
+						// if not, check if a general linked sheet exists
+						linkedSheet, ok = s.Sheets[linkedSheetName]
+						if !ok {
+							return fmt.Errorf("linked sheet not found: %s", linkedSheetName)
+						}
 					}
-				}
 
-				for i, data := range sheet.Data {
-					if data[header].Empty() {
-						continue
+					for i, data := range sheet.Data {
+						if data[header].Empty() {
+							continue
+						}
+						ref := data[header].String()
+						linkedData := linkedSheet.DataByRef[ref]
+						if linkedData == nil {
+							return fmt.Errorf("linked data not found: %s", ref)
+						}
+						sheet.Data[i][linkedSheetName] = Cell{linkedData}
 					}
-					ref := data[header].String()
-					linkedData := linkedSheet.DataByRef[ref]
-					if linkedData == nil {
-						return fmt.Errorf("linked data not found: %s", ref)
-					}
-					sheet.Data[i][linkedSheetName] = Cell{linkedData}
 				}
 			}
-
 		}
-
 	}
 	return nil
 }

@@ -82,7 +82,7 @@ func (s *Service) Start(ctx context.Context) error {
 
 	// GET SHEET DATA
 	{
-		if err := s.GetSheetData("global", "expedition"); err != nil {
+		if err := s.GetSheetData(nil, "global", "expedition"); err != nil {
 			return fmt.Errorf("unable to get global / expedition sheet data: %w", err)
 		}
 

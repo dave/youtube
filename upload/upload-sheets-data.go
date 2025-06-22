@@ -160,6 +160,9 @@ type Expedition struct {
 	ThumbnailsDropbox  string
 	ExpeditionPlaylist bool
 	SectionPlaylists   bool
+	DataSheetId        string
+	Spreadsheet        *sheets.Spreadsheet
+	Sheets             map[string]*Sheet
 	Data               map[string]Cell
 	SectionsByRef      map[string]*Section
 	Sections           []*Section
