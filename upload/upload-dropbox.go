@@ -22,13 +22,24 @@ func (s *Service) InitDropboxService(ctx context.Context) error {
 		return nil
 	}
 
+	cfg, err := GetDropboxConfig(ctx)
+	if err != nil {
+		return fmt.Errorf("loading Dropbox Config: %w", err)
+	}
+
+	s.DropboxConfig = cfg
+
+	return nil
+}
+
+func GetDropboxConfig(ctx context.Context) (*dropbox.Config, error) {
 	tokens, err := readDropboxTokens()
 	if err != nil {
-		return fmt.Errorf("reading dropbox token: %w", err)
+		return nil, fmt.Errorf("reading dropbox token: %w", err)
 	}
 
 	if tokens[DropboxClientID] == "" || tokens[DropboxClientSecret] == "" {
-		return fmt.Errorf("missing dropbox client id or secret")
+		return nil, fmt.Errorf("missing dropbox client id or secret")
 	}
 
 	conf := &oauth2.Config{
@@ -48,19 +59,19 @@ func (s *Service) InitDropboxService(ctx context.Context) error {
 
 		var code string
 		if _, err = fmt.Scan(&code); err != nil {
-			return fmt.Errorf("scanning authorization code: %w", err)
+			return nil, fmt.Errorf("scanning authorization code: %w", err)
 		}
 		ctx := context.Background()
 		token, err = conf.Exchange(ctx, code)
 		if err != nil {
-			return fmt.Errorf("exchanging authorization code: %w", err)
+			return nil, fmt.Errorf("exchanging authorization code: %w", err)
 		}
 		if token.RefreshToken == "" {
-			return fmt.Errorf("dropbox oauth2 response missing refresh token")
+			return nil, fmt.Errorf("dropbox oauth2 response missing refresh token")
 		}
 		tokens[DropboxRefreshToken] = token.RefreshToken
 		if err := writeDropboxTokens(tokens); err != nil {
-			return fmt.Errorf("writing dropbox tokens: %w", err)
+			return nil, fmt.Errorf("writing dropbox tokens: %w", err)
 		}
 	} else {
 		token = &oauth2.Token{
@@ -70,12 +81,12 @@ func (s *Service) InitDropboxService(ctx context.Context) error {
 
 	client := oauth2.NewClient(ctx, conf.TokenSource(ctx, token))
 
-	s.DropboxConfig = &dropbox.Config{
+	cfg := &dropbox.Config{
 		Token:    token.AccessToken,
 		LogLevel: dropbox.LogOff,
 		Client:   client,
 	}
-	return nil
+	return cfg, nil
 }
 
 type DropboxKeys int

@@ -112,8 +112,8 @@ func (s *Service) GetSheetData(expedition *Expedition, titles ...string) error {
 		sheet := &Sheet{
 			DataByRef: map[string]map[string]Cell{},
 		}
+		sheet.Name = title
 		if expedition != nil {
-			sheet.Name = strings.TrimPrefix(title, expedition.Ref+"_")
 			sheet.Expedition = expedition
 			sheet.Spreadsheet = expedition.Spreadsheet
 			expedition.Sheets[sheet.Name] = sheet
@@ -121,7 +121,6 @@ func (s *Service) GetSheetData(expedition *Expedition, titles ...string) error {
 				expedition.ItemSheet = sheet
 			}
 		} else {
-			sheet.Name = title
 			sheet.Spreadsheet = s.Spreadsheet
 			s.Sheets[sheet.Name] = sheet
 		}

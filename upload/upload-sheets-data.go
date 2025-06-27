@@ -25,14 +25,6 @@ type Sheet struct {
 	DataByRef   map[string]map[string]Cell
 }
 
-func (s *Sheet) FullName() string {
-	if s.Expedition != nil {
-		return s.Expedition.Ref + "_" + s.Name
-	} else {
-		return s.Name
-	}
-}
-
 func (s *Sheet) Set(service *sheets.Service, rowId int, column string, value any, force bool) error {
 
 	// find column in headers
@@ -47,11 +39,11 @@ func (s *Sheet) Set(service *sheets.Service, rowId int, column string, value any
 	}
 	cellRange := getCellRange(columnId+1, rowId)
 
-	if s.FullName() == "" {
+	if s.Name == "" {
 		return fmt.Errorf("sheet has no name")
 	}
 
-	sheetRange := fmt.Sprintf("%s!%s", s.FullName(), cellRange)
+	sheetRange := fmt.Sprintf("%s!%s", s.Name, cellRange)
 	if !force {
 		// Read the current value of the cell
 		resp, err := service.Spreadsheets.Values.Get(s.Spreadsheet.SpreadsheetId, sheetRange).Do()
@@ -65,7 +57,7 @@ func (s *Sheet) Set(service *sheets.Service, rowId int, column string, value any
 		}
 	}
 
-	fmt.Printf("Updating cell %v (%v) in %v\n", cellRange, column, s.FullName())
+	fmt.Printf("Updating cell %v (%v) in %v\n", cellRange, column, s.Name)
 
 	// Update the cell with the new value
 	valueRange := &sheets.ValueRange{
@@ -84,7 +76,7 @@ func (s *Sheet) Set(service *sheets.Service, rowId int, column string, value any
 		}
 	}
 	if dataId == -1 {
-		return fmt.Errorf("item with row_id %v not found in %v", rowId, s.FullName())
+		return fmt.Errorf("item with row_id %v not found in %v", rowId, s.Name)
 	}
 	s.Data[dataId][column] = Cell{value}
 	if ref, found := s.Data[dataId]["ref"]; found {
@@ -108,13 +100,13 @@ func (s *Sheet) Clear(service *sheets.Service, rowId int, column string) error {
 	}
 	cellRange := getCellRange(columnId+1, rowId)
 
-	if s.FullName() == "" {
+	if s.Name == "" {
 		return fmt.Errorf("sheet has no name")
 	}
 
-	sheetRange := fmt.Sprintf("%s!%s", s.FullName(), cellRange)
+	sheetRange := fmt.Sprintf("%s!%s", s.Name, cellRange)
 
-	fmt.Printf("Clearing cell %v (%v) in %v\n", cellRange, column, s.FullName())
+	fmt.Printf("Clearing cell %v (%v) in %v\n", cellRange, column, s.Name)
 
 	_, err := service.Spreadsheets.Values.Clear(s.Spreadsheet.SpreadsheetId, sheetRange, &sheets.ClearValuesRequest{}).Do()
 	if err != nil {
@@ -129,7 +121,7 @@ func (s *Sheet) Clear(service *sheets.Service, rowId int, column string) error {
 		}
 	}
 	if dataId == -1 {
-		return fmt.Errorf("item with row_id %v not found in %v", rowId, s.FullName())
+		return fmt.Errorf("item with row_id %v not found in %v", rowId, s.Name)
 	}
 	s.Data[dataId][column] = Cell{nil}
 	if ref, found := s.Data[dataId]["ref"]; found {
