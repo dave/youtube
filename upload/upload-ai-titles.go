@@ -145,14 +145,14 @@ Here's the data about the videos:
 			if item == nil {
 				return fmt.Errorf("no item found for %#v", resultItem)
 			}
-			// headers := []string{"expedition", "type", "key", "title", "thumbnail", "description"}
+			// headers := []string{"expedition", "type", "key", "title", "thumbnail", "tags", "description"}
 			var value []any
 			value = append(value, item.Expedition.Ref)
 			value = append(value, item.Type)
 			value = append(value, item.Key)
 			value = append(value, resultItem.Title)
 			value = append(value, resultItem.Thumbnail)
-			value = append(value, strings.Join(resultItem.Tags, "\n"))
+			value = append(value, strings.ToLower(strings.Join(resultItem.Tags, "\n")))
 			value = append(value, resultItem.Description)
 			values = append(values, value)
 		}
