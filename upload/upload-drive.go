@@ -95,7 +95,7 @@ func (s *Service) FindGoogleDriveFiles() error {
 					}
 				}
 				if item.VideoGoogleDrive == nil {
-					return fmt.Errorf("no video file found (%v)", item.String())
+					return fmt.Errorf("no video file found for regex %q (%v)", videoFilenameRegexBuffer.String(), item.String())
 				}
 			}
 
@@ -115,7 +115,7 @@ func (s *Service) FindGoogleDriveFiles() error {
 					}
 				}
 				if item.ThumbnailGoogleDrive == nil {
-					return fmt.Errorf("no thumbnail file found (%v)", item.String())
+					return fmt.Errorf("no thumbnail file found for regex %q (%v)", thumbnailFilenameRegexBuffer.String(), item.String())
 				}
 			}
 		}

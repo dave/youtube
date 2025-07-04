@@ -113,6 +113,10 @@ func (s *Service) Start(ctx context.Context) error {
 		if err := s.ParseLinkedData(); err != nil {
 			return fmt.Errorf("unable to parse linked data: %w", err)
 		}
+
+		if err := s.UpdateVideoTitles(); err != nil {
+			return fmt.Errorf("unable to parse linked data: %w", err)
+		}
 	}
 
 	// CLEAR PREVIEW SHEET AND FOLDER

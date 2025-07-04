@@ -84,4 +84,6 @@ var Funcs = template.FuncMap{
 		}
 		return dict, nil
 	},
+
+	"nilval": func() any { return nil },
 }

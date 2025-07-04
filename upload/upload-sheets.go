@@ -582,6 +582,43 @@ func (s *Service) ParseLinkedData() error {
 	return nil
 }
 
+func (s *Service) UpdateVideoTitles() error {
+	for _, expedition := range s.Expeditions {
+		if !expedition.Process {
+			continue
+		}
+		for _, item := range expedition.Items {
+			if !item.Video {
+				continue
+			}
+			f := func(templateName, columnName string) error {
+				if expedition.Templates.Lookup(templateName) == nil {
+					return nil
+				}
+				buf := &strings.Builder{}
+				if err := expedition.Templates.ExecuteTemplate(buf, templateName, item); err != nil {
+					return fmt.Errorf("unable to execute template (%v): %w", templateName, err)
+				}
+				value := buf.String()
+				if item.Data[columnName].String() == value {
+					return nil
+				}
+				if err := item.Set(s, columnName, value, true); err != nil {
+					return fmt.Errorf("unable to update column %v (%v): %w", columnName, item.String(), err)
+				}
+				return nil
+			}
+			if err := f("video_title_1", "video_title_1"); err != nil {
+				return fmt.Errorf("running video_title_1 template: %w", err)
+			}
+			if err := f("video_title_2", "video_title_2"); err != nil {
+				return fmt.Errorf("running video_title_2 template: %w", err)
+			}
+		}
+	}
+	return nil
+}
+
 func (s *Service) StorePlaylistPreviewOps(parent HasPlaylist, name string, ops []string) {
 	if _, ok := s.PlaylistPreviewData[parent]; !ok {
 		s.PlaylistPreviewData[parent] = map[string]any{}
