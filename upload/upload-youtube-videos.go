@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"io"
 	"regexp"
+	"slices"
 	"strings"
 	"time"
 
@@ -281,6 +282,7 @@ func (s *Service) updateVideo(item *Item) error {
 		s.StoreVideoPreview(item, "video_description", changes.Description.Before, changes.Description.After)
 		s.StoreVideoPreview(item, "video_privacy_status", changes.PrivacyStatus.Before, changes.PrivacyStatus.After)
 		s.StoreVideoPreview(item, "video_publish_at", changes.PublishAt.Before, changes.PublishAt.After)
+		s.StoreVideoPreview(item, "video_tags", changes.Tags.Before, changes.Tags.After)
 	}
 	if s.Global.Production && item.Ready && changes.Changed {
 		fmt.Printf("Updating video (%v)\n", item.String())
@@ -309,6 +311,7 @@ func (s *Service) createVideo(ctx context.Context, item *Item) error {
 		s.StoreVideoPreview(item, "video_description", "", changes.Description.After)
 		s.StoreVideoPreview(item, "video_privacy_status", "", changes.PrivacyStatus.After)
 		s.StoreVideoPreview(item, "video_publish_at", "", changes.PublishAt.After)
+		s.StoreVideoPreview(item, "video_tags", "", changes.Tags.After)
 	}
 	if s.Global.Production && item.Ready {
 
@@ -372,6 +375,8 @@ func apply(item *Item) (YoutubeFields, error) {
 	}
 	fields.Title = bufTitle.String()
 
+	fields.Tags = item.Tags
+
 	return fields, nil
 }
 
@@ -393,6 +398,7 @@ type YoutubeFields struct {
 	LiveBroadcastContent string
 	Description          string // no default
 	Title                string // no default
+	Tags                 []string
 }
 
 func DefaultYoutubeFields() YoutubeFields {
@@ -410,8 +416,8 @@ type Change struct {
 	Before, After string
 }
 type Changes struct {
-	Changed                                      bool
-	PrivacyStatus, PublishAt, Description, Title Change
+	Changed                                            bool
+	PrivacyStatus, PublishAt, Description, Title, Tags Change
 }
 
 func (y *YoutubeFields) Apply(video *youtube.Video) Changes {
@@ -429,6 +435,7 @@ func (y *YoutubeFields) Apply(video *youtube.Video) Changes {
 		PublishAt:     Change{Before: video.Status.PublishAt},
 		Description:   Change{Before: video.Snippet.Description},
 		Title:         Change{Before: video.Snippet.Title},
+		Tags:          Change{Before: strings.Join(video.Snippet.Tags, "\n")},
 	}
 
 	if time.Now().After(y.PublishAt) {
@@ -479,10 +486,16 @@ func (y *YoutubeFields) Apply(video *youtube.Video) Changes {
 		video.Snippet.Title = y.Title
 	}
 
+	if !slices.Equal(video.Snippet.Tags, y.Tags) {
+		c.Changed = true
+		video.Snippet.Tags = y.Tags
+	}
+
 	c.PrivacyStatus.After = video.Status.PrivacyStatus
 	c.PublishAt.After = video.Status.PublishAt
 	c.Description.After = video.Snippet.Description
 	c.Title.After = video.Snippet.Title
+	c.Tags.After = strings.Join(video.Snippet.Tags, "\n")
 
 	return c
 }

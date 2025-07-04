@@ -34,6 +34,7 @@ func (s *Service) GenerateAiTitles(ctx context.Context) error {
 				Title:       item.Data["title"].String(),
 				Thumbnail:   item.Data["thumbnail"].String(),
 				Description: item.Data["description"].String(),
+				Tags:        strings.Split(item.Data["tags"].String(), "\n"),
 			}
 			if item.YoutubeTranscript != "" && item.YoutubeTranscript != "[None]" {
 				var landmarks []string
@@ -89,9 +90,10 @@ func (s *Service) GenerateAiTitles(ctx context.Context) error {
 						"key":         {Type: genai.TypeInteger},
 						"title":       {Type: genai.TypeString},
 						"thumbnail":   {Type: genai.TypeString},
+						"tags":        {Type: genai.TypeArray, Items: &genai.Schema{Type: genai.TypeString}},
 						"description": {Type: genai.TypeString},
 					},
-					PropertyOrdering: []string{"type", "section", "key", "title", "thumbnail", "description"},
+					PropertyOrdering: []string{"type", "section", "key", "title", "thumbnail", "tags", "description"},
 				},
 			},
 		}
@@ -150,6 +152,7 @@ Here's the data about the videos:
 			value = append(value, item.Key)
 			value = append(value, resultItem.Title)
 			value = append(value, resultItem.Thumbnail)
+			value = append(value, strings.Join(resultItem.Tags, "\n"))
 			value = append(value, resultItem.Description)
 			values = append(values, value)
 		}
@@ -181,21 +184,23 @@ type GeminiRequest struct {
 }
 
 type GeminiRequestItem struct {
-	Type        string `json:"type"`
-	Section     string `json:"section"`
-	Key         int    `json:"key"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Thumbnail   string `json:"thumbnail"`
-	Landmarks   string `json:"landmarks"`
-	Transcript  string `json:"transcript"`
+	Type        string   `json:"type"`
+	Section     string   `json:"section"`
+	Key         int      `json:"key"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Thumbnail   string   `json:"thumbnail"`
+	Tags        []string `json:"tags"`
+	Landmarks   string   `json:"landmarks"`
+	Transcript  string   `json:"transcript"`
 }
 
 type GeminiResponseItem struct {
-	Type        string `json:"type"`
-	Section     string `json:"section"`
-	Key         int    `json:"key"`
-	Title       string `json:"title"`
-	Description string `json:"description"`
-	Thumbnail   string `json:"thumbnail"`
+	Type        string   `json:"type"`
+	Section     string   `json:"section"`
+	Key         int      `json:"key"`
+	Title       string   `json:"title"`
+	Description string   `json:"description"`
+	Thumbnail   string   `json:"thumbnail"`
+	Tags        []string `json:"tags"`
 }

@@ -207,6 +207,7 @@ type Item struct {
 	YoutubeId            string
 	YoutubeVideo         *youtube.Video
 	YoutubeTranscript    string
+	Tags                 []string
 }
 
 type Location struct {

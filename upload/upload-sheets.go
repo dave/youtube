@@ -246,7 +246,7 @@ func (s *Service) WriteVideosPreview() error {
 
 	// write preview data
 	// expedition	type	key	changed	video_privacy_status	video_publish_at	video_title	video_description
-	headers := []string{"video_privacy_status", "video_publish_at", "video_title", "video_description"}
+	headers := []string{"video_privacy_status", "video_publish_at", "video_title", "video_description", "video_tags"}
 	var values [][]any
 
 	var keys []*Item
@@ -494,6 +494,7 @@ func (s *Service) ParseItems() error {
 				Ready:             data["ready"].Bool(),
 				DoThumbnail:       data["do_thumbnail"].Bool(),
 				YoutubeTranscript: data["transcript"].String(),
+				Tags:              strings.Split(data["tags"].String(), "\n"),
 				Release:           release,
 				Data:              data,
 				Template:          data["template"].String(),
