@@ -7,7 +7,6 @@ import (
 	"fmt"
 	"io"
 	"regexp"
-	"slices"
 	"strings"
 	"time"
 
@@ -486,7 +485,7 @@ func (y *YoutubeFields) Apply(video *youtube.Video) Changes {
 		video.Snippet.Title = y.Title
 	}
 
-	if !slices.Equal(video.Snippet.Tags, y.Tags) {
+	if !slicesEqualUnordered(video.Snippet.Tags, y.Tags) {
 		c.Changed = true
 		video.Snippet.Tags = y.Tags
 	}
@@ -498,6 +497,37 @@ func (y *YoutubeFields) Apply(video *youtube.Video) Changes {
 	c.Tags.After = strings.Join(video.Snippet.Tags, "\n")
 
 	return c
+}
+
+// slicesEqualUnordered checks if two slices are equal, ignoring the order of items.
+func slicesEqualUnordered(slice1, slice2 []string) bool {
+	if len(slice1) != len(slice2) {
+		return false
+	}
+
+	counts := make(map[string]int)
+
+	// Count occurrences in the first slice
+	for _, item := range slice1 {
+		counts[item]++
+	}
+
+	// Subtract occurrences based on the second slice
+	for _, item := range slice2 {
+		counts[item]--
+		if counts[item] < 0 {
+			return false
+		}
+	}
+
+	// Ensure all counts are zero
+	for _, count := range counts {
+		if count != 0 {
+			return false
+		}
+	}
+
+	return true
 }
 
 func timeToYoutube(t time.Time) string {
