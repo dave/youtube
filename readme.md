@@ -1,4 +1,4 @@
-# Wilderness Prime YouTube Uploader
+# Wilderness Prime Uploader
 
 *This tool is not intended for general use.*
 

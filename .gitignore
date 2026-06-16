@@ -1,2 +1,5 @@
 .idea/
 .DS_Store
+
+# Local-only YouTube API audit working files (contains personal address / project data — never publish)
+audit/
